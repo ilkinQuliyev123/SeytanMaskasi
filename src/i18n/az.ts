@@ -23,6 +23,7 @@ export const T = {
   enemies: "Hər qəsrdə düşmən",
   myWeapons: "Sənin silahların",
   hp: "Can",
+  version: "v0.1",
   reloading: "Doldurulur...",
   enemy: "Düşmən",
   squad: "Dəstə",

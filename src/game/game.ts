@@ -1,5 +1,6 @@
 // Oyun dövrəsi: səhnə, dünya, səma, qəsrlər, oyunçu, dəstə, düşmən ordusu, toplar, HUD, qələbə/məğlubiyyət.
-import { Color3, DefaultRenderingPipeline, Engine, GlowLayer, ImageProcessingConfiguration, MeshBuilder, PointLight, Ray, Scene, StandardMaterial, Vector3, type LinesMesh } from "@babylonjs/core";
+import { Color3, DefaultRenderingPipeline, Engine, GlowLayer, ImageProcessingConfiguration, LoadAssetContainerAsync, MeshBuilder, PointLight, Ray, Scene, SSAO2RenderingPipeline, StandardMaterial, Vector3, type LinesMesh } from "@babylonjs/core";
+import "@babylonjs/loaders/glTF";
 import { FORTS, UNITS, type ArmySetup, type Fort, type GameMap } from "./data";
 import { fortLayout, HAMLETS, heightAt, roadPoint, SITES, type FortLayout } from "./logic";
 import { Player } from "./player";
@@ -83,6 +84,7 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
   for (let i = 0; i < 12; i++) { const c = new Unit(scene, UNITS.koylu, "", Vector3.Zero(), Vector3.Zero()); c.setRoute(roadRoute); civs.push(c); }
   const enemies = forts.flatMap((f) => f.units), cannons = forts.flatMap((f) => f.cannons);
   const hittable: Target[] = [...enemies, ...cannons];
+  LoadAssetContainerAsync("/assets/models/cannon_01/cannon_01.gltf", scene).then((c) => cannons.forEach((cn) => cn.useModel(c))).catch(() => {}); // real top modeli (yüklənənə qədər sadə model)
   if (at) { const f = forts.find((x) => x.fort.id === at) ?? forts[0]; if (f) { const g = f.lay.gate, R = f.lay.site.R + 70; player.pos.set(f.lay.site.x + Math.sin(g) * R, 0, f.lay.site.z + Math.cos(g) * R); player.yaw = g + Math.PI; } }
 
   // görünüş: kino tonu, bloom, FXAA, vinyet
@@ -94,7 +96,14 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
   pipe.imageProcessing.contrast = 1.25; pipe.imageProcessing.exposure = 1.6;
   pipe.imageProcessing.vignetteEnabled = true; pipe.imageProcessing.vignetteWeight = 2.4;
   pipe.bloomEnabled = quality === "mid"; pipe.bloomThreshold = 0.6; pipe.bloomWeight = 0.45;
-  if (quality === "mid") new GlowLayer("glow", scene, { blurKernelSize: 32 }).intensity = 0.8;
+  pipe.sharpenEnabled = true; pipe.sharpen.edgeAmount = 0.35; // kəskinlik
+  pipe.grainEnabled = true; pipe.grain.intensity = 6; pipe.grain.animated = true; // kino dənəsi
+  pipe.chromaticAberrationEnabled = true; pipe.chromaticAberration.aberrationAmount = 4; pipe.chromaticAberration.radialIntensity = 0.8;
+  if (quality === "mid") {
+    new GlowLayer("glow", scene, { blurKernelSize: 32 }).intensity = 0.8;
+    const ao = new SSAO2RenderingPipeline("ssao", scene, { ssaoRatio: 0.5, blurRatio: 0.5 }, [player.camera]); // künclərdə dərinlik
+    ao.radius = 1.5; ao.totalStrength = 1.1; ao.samples = 8; ao.maxZ = 120;
+  }
 
   // fənər işıqları: 2 nöqtə işığı həmişə oyunçuya ən yaxın fənərlərə keçir (işıq limiti + performans)
   const lamps = [0, 1].map((i) => { const l = new PointLight("lamp" + i, Vector3.Zero(), scene); l.diffuse = new Color3(1, 0.62, 0.3); l.specular = Color3.Black(); l.intensity = 1.6; l.range = 28; return l; });

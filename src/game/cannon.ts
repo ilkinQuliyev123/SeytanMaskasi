@@ -1,5 +1,5 @@
 // Top: xidmətçisi sağ və qəsr həyəcanda olanda hədəfə mərmi atır. Yerdə qırmızı halqa — xəbərdarlıq.
-import { Color3, Mesh, MeshBuilder, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
+import { Color3, Mesh, MeshBuilder, Scene, StandardMaterial, TransformNode, Vector3, type AbstractMesh, type AssetContainer } from "@babylonjs/core";
 import type { Target, Unit } from "./units";
 
 let shared: { shell: StandardMaterial; ring: StandardMaterial; boom: StandardMaterial } | null = null;
@@ -14,14 +14,23 @@ export class Cannon implements Target {
   ally = false; hp = 150; private cool = 3 + Math.random() * 3;
   private fl: { a: Vector3; b: Vector3; t: number; dur: number } | null = null; private boomT = 0;
   private shell: Mesh; private ring: Mesh; private boom: Mesh;
-  constructor(scene: Scene, base: Mesh, public pos: Vector3, face: number, public crew: Unit | null) {
-    const inst = base.createInstance("cannon");
+  inst: AbstractMesh;
+  constructor(scene: Scene, base: Mesh, public pos: Vector3, public face: number, public crew: Unit | null) {
+    const inst = (this.inst = base.createInstance("cannon"));
     inst.position.copyFrom(pos); inst.rotation.y = face; inst.metadata = { unit: this };
     const M = mats(scene);
     this.shell = MeshBuilder.CreateSphere("shell", { diameter: 0.5, segments: 4 }, scene); this.shell.material = M.shell;
     this.ring = MeshBuilder.CreateTorus("ring", { diameter: 9, thickness: 0.35, tessellation: 24 }, scene); this.ring.material = M.ring;
     this.boom = MeshBuilder.CreateSphere("boom", { diameter: 1, segments: 6 }, scene); this.boom.material = M.boom;
     for (const m of [this.shell, this.ring, this.boom]) { m.isPickable = false; m.setEnabled(false); }
+  }
+  /** sadə modeli real (Poly Haven) top modeli ilə əvəz edir */
+  useModel(c: AssetContainer) {
+    const e = c.instantiateModelsToScene((n) => n, false), holder = new TransformNode("cannonHolder", this.inst.getScene());
+    holder.position.copyFrom(this.pos); holder.rotation.y = this.face + Math.PI / 2; holder.scaling.setAll(1.3);
+    for (const r of e.rootNodes) r.parent = holder;
+    for (const m of holder.getChildMeshes()) m.metadata = { unit: this };
+    this.inst.setEnabled(false);
   }
   get alive() { return this.hp > 0 && !!this.crew?.alive; }
   hit(d: number) { this.hp -= d; }
