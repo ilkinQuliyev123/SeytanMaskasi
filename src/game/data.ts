@@ -6,6 +6,9 @@ export interface Weapon {
 }
 
 export const WEAPONS: Record<string, Weapon> = {
+  pbow: { id: "pbow", name: "Ox-kaman", dmg: 95, rate: 1.1, mag: 1, reload: 0.6, spread: 0.002, range: 120, noise: 4 },
+  sniper: { id: "sniper", name: "CheyTac tipli snayper", dmg: 220, rate: 0.6, mag: 7, reload: 3.2, spread: 0.0008, range: 450, noise: 85 },
+  glock: { id: "glock", name: "Glock tipli tapança", dmg: 30, rate: 5, mag: 17, reload: 1.5, spread: 0.02, range: 60, noise: 40 },
   rifle: { id: "rifle", name: "Dövrün tüfəngi", dmg: 70, rate: 0.9, mag: 5, reload: 2.8, spread: 0.004, range: 160, noise: 70 },
   m16: { id: "m16", name: "M16 tipli avtomat", dmg: 24, rate: 11, mag: 30, reload: 2.2, spread: 0.02, range: 110, noise: 55 },
   aug: { id: "aug", name: "AUG A3 tipli tüfəng", dmg: 27, rate: 10, mag: 30, reload: 2.4, spread: 0.014, range: 120, noise: 50 },
@@ -19,28 +22,37 @@ export const WEAPONS: Record<string, Weapon> = {
   bow: { id: "bow", name: "Yay", dmg: 25, rate: 0.8, mag: 30, reload: 0, spread: 0.05, range: 60, noise: 8 },
 };
 
-export const PLAYER_WEAPONS = ["rifle", "m16", "aug"] as const;
+/** yalnız oyunçunun silahları (1–5 düymələri) */
+export const PLAYER_WEAPONS = ["pbow", "sniper", "glock", "m16", "aug"] as const;
 
-export interface UnitType { id: string; name: string; hp: number; speed: number; color: string; weapons: string[]; ally: boolean }
+export interface UnitType { id: string; name: string; hp: number; speed: number; color: string; weapons: string[]; ally: boolean; mounted?: boolean; civ?: boolean }
 
 export const UNITS: Record<string, UnitType> = {
   samurai: { id: "samurai", name: "Samuray", hp: 140, speed: 4.2, color: "#b3261e", weapons: ["katana", "yari", "yumi"], ally: true },
   ninja: { id: "ninja", name: "Ninja", hp: 90, speed: 6.0, color: "#15151a", weapons: ["shuriken", "wakizashi"], ally: true },
   ottoman: { id: "ottoman", name: "Osmanlı əsgəri", hp: 100, speed: 4.0, color: "#2e6b3a", weapons: ["musket", "scimitar"], ally: false },
+  yeniceri: { id: "yeniceri", name: "Yeniçəri", hp: 120, speed: 4.0, color: "#8c1c1c", weapons: ["musket", "scimitar"], ally: false },
+  okcu: { id: "okcu", name: "Osmanlı oxçusu", hp: 90, speed: 4.2, color: "#2e5d3a", weapons: ["bow"], ally: false },
+  sipahi: { id: "sipahi", name: "Süvari (sipahi)", hp: 170, speed: 8.5, color: "#7a1f1f", weapons: ["scimitar"], ally: false, mounted: true },
+  atli_okcu: { id: "atli_okcu", name: "Atlı oxçu", hp: 140, speed: 8, color: "#5a3d22", weapons: ["bow"], ally: false, mounted: true },
+  mulki: { id: "mulki", name: "Kəndli", hp: 50, speed: 2.2, color: "#8a6a48", weapons: [], ally: false, civ: true },
+  mulki2: { id: "mulki2", name: "Kəndli qadın", hp: 50, speed: 2.0, color: "#6a4a6a", weapons: [], ally: false, civ: true },
   mongol: { id: "mongol", name: "Monqol döyüşçüsü", hp: 110, speed: 4.6, color: "#7a5230", weapons: ["bow", "scimitar"], ally: false },
 };
 
-export interface Camp { id: string; name: string; unit: string; x: number; z: number }
-export interface GameMap { id: string; name: string; desc: string; ready: boolean; camps: Camp[] }
+/** qəsr: SITES-dəki yer + oradakı döyüşçülər (əsas və köməkçi növ) */
+export interface Fort { id: string; name: string; unit: string; alt: string; flag: string }
+export const FORTS: Record<string, Fort> = {
+  ottoman: { id: "ottoman", name: "Osmanlı qəsri", unit: "yeniceri", alt: "ottoman", flag: "#1f7a3a" },
+};
+export interface GameMap { id: string; name: string; desc: string; ready: boolean; forts: string[]; startHour?: number }
 
 export const MAPS: GameMap[] = [
-  { id: "palace", name: "Dörd dağ arasında saray", ready: true,
-    desc: "Meşənin içində sənin yapon sarayın. Dəstəni yığ, keçidlərdəki Osmanlı və Monqol düşərgələrinə basqın et.",
-    camps: [{ id: "ottoman", name: "Osmanlı keşik düşərgəsi", unit: "ottoman", x: 0, z: 150 },
-            { id: "mongol", name: "Monqol dəstəsinin düşərgəsi", unit: "mongol", x: 150, z: 0 }] },
-  { id: "kurtulus", name: "Qurtuluş Savaşı (1919–1922)", ready: false, desc: "Fiktiv komandir. Tezliklə.", camps: [] },
-  { id: "karabakh", name: "Qarabağ zonası", ready: false, desc: "Tezliklə.", camps: [] },
-  { id: "city", name: "İşğal altındakı şəhər", ready: false, desc: "Fiktiv şəhər, mülkiləri qoru. Tezliklə.", camps: [] },
+  { id: "palace", name: "Samuray: Dörd dağın hökmdarı", ready: true, forts: ["ottoman"], startHour: 23,
+    desc: "Gecədir. Dörd dağ arasındakı sarayından çıx, keçiddən 1 km irəlidəki Osmanlı qəsrinə basqın et, yeniçəriləri təmizlə." },
+  { id: "kurtulus", name: "Qurtuluş Savaşı (1919–1922)", ready: false, desc: "Fiktiv komandir. Tezliklə.", forts: [] },
+  { id: "karabakh", name: "Qarabağ zonası", ready: false, desc: "Tezliklə.", forts: [] },
+  { id: "city", name: "İşğal altındakı şəhər", ready: false, desc: "Fiktiv şəhər, mülkiləri qoru. Tezliklə.", forts: [] },
 ];
 
 // Saat formaları (orijinal). Faza 1: ilk üçü.
@@ -52,4 +64,4 @@ export const FORMS: Form[] = [
 ];
 
 export interface ArmySetup { samurai: number; ninja: number; samuraiWeapon: string; ninjaWeapon: string; enemies: number; weapons: string[] }
-export const DEFAULT_SETUP: ArmySetup = { samurai: 6, ninja: 4, samuraiWeapon: "katana", ninjaWeapon: "shuriken", enemies: 10, weapons: ["rifle", "aug"] };
+export const DEFAULT_SETUP: ArmySetup = { samurai: 6, ninja: 4, samuraiWeapon: "katana", ninjaWeapon: "shuriken", enemies: 500, weapons: [...PLAYER_WEAPONS] };

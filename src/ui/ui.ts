@@ -50,11 +50,11 @@ export function setupMenu(map: GameMap, st: ArmySetup, onStart: (s: ArmySetup) =
   el("div", "sub", T.setupTitle, s);
   const p = el("div", "panel", "", s);
 
-  const range = (label: string, min: number, max: number, v: number) => {
+  const range = (label: string, min: number, max: number, v: number, step = 1) => {
     el("label", "", label, p);
     const w = el("div", "", "", p);
     const i = el("input", "", "", w);
-    i.type = "range"; i.min = String(min); i.max = String(max); i.value = String(v);
+    i.type = "range"; i.min = String(min); i.max = String(max); i.step = String(step); i.value = String(v);
     const l = el("span", "val", String(v), w);
     i.oninput = () => (l.textContent = i.value);
     return i;
@@ -69,33 +69,21 @@ export function setupMenu(map: GameMap, st: ArmySetup, onStart: (s: ArmySetup) =
     return sel;
   };
 
-  const sam = range(T.samurai, 0, 20, st.samurai);
-  const nin = range(T.ninja, 0, 20, st.ninja);
+  const sam = range(T.samurai, 0, 50, st.samurai);
+  const nin = range(T.ninja, 0, 50, st.ninja);
   const sw = select(T.samuraiWeapon, UNITS.samurai.weapons, st.samuraiWeapon);
   const nw = select(T.ninjaWeapon, UNITS.ninja.weapons, st.ninjaWeapon);
-  const en = range(T.enemies, 5, 30, st.enemies);
+  const en = range(T.enemies, 50, 800, st.enemies, 50);
 
   el("label", "", T.myWeapons, p);
-  const chk = el("div", "chk", "", p);
-  const boxes = PLAYER_WEAPONS.map(id => {
-    const lb = el("label", "", "", chk);
-    const cb = el("input", "", "", lb);
-    cb.type = "checkbox"; cb.checked = st.weapons.includes(id);
-    lb.appendChild(document.createTextNode(" " + WEAPONS[id].name));
-    return { id, cb };
-  });
-  const checked = () => boxes.filter(b => b.cb.checked).length;
-  for (const b of boxes) b.cb.onchange = () => {
-    const n = checked();
-    if (n < 1) b.cb.checked = true;
-    else if (n > 3) b.cb.checked = false;
-  };
+  const wl = el("div", "wlist", "", p);
+  PLAYER_WEAPONS.forEach((id, i) => el("div", "", `${i + 1}. ${WEAPONS[id].name}`, wl));
 
   const row = el("div", "row", "", s);
   btn(T.back, onBack, row, "ghost");
   btn(T.start, () => onStart({
     samurai: +sam.value, ninja: +nin.value, samuraiWeapon: sw.value, ninjaWeapon: nw.value,
-    enemies: +en.value, weapons: boxes.filter(b => b.cb.checked).map(b => b.id),
+    enemies: +en.value, weapons: [...PLAYER_WEAPONS],
   }), row);
 }
 
@@ -119,6 +107,7 @@ export interface HudState {
   hour: number; weather: string; enemiesLeft: number; enemiesTotal: number; allies: number;
   form: { name: string; left: number; color: string } | null;
   cooldowns: { name: string; cd: number }[]; fps: number; msg: string;
+  forts: { cleared: number; total: number }; scope: 0 | 1 | 2;
 }
 
 export function createHud(): { update(s: HudState): void; destroy(): void } {
@@ -138,7 +127,10 @@ export function createHud(): { update(s: HudState): void; destroy(): void } {
   const cds = el("div", "cds", "", h);
   const fps = el("div", "fps", "", h);
   const msg = el("div", "msg", "", h);
-  el("div", "cross", "", h);
+  const cross = el("div", "cross", "", h);
+  const scope = el("div", "scope", "", h);
+  el("i", "", "", scope); el("i", "", "", scope); el("b", "", "", scope);
+  let lastScope = -1;
 
   const set = (e: HTMLElement, t: string) => { if (e.textContent !== t) e.textContent = t; };
   return {
@@ -156,6 +148,12 @@ export function createHud(): { update(s: HudState): void; destroy(): void } {
       form.style.color = s.form ? s.form.color : "";
       set(cds, s.cooldowns.filter(c => c.cd > 0).map(c => `${c.name}: ${Math.ceil(c.cd)} s`).join("\n"));
       cds.style.whiteSpace = "pre";
+      if (s.scope !== lastScope) {
+        lastScope = s.scope;
+        scope.classList.toggle("on", s.scope === 2);
+        cross.classList.toggle("off", s.scope === 2);
+        cross.classList.toggle("tight", s.scope === 1);
+      }
       set(fps, `${T.fps} ${Math.round(s.fps)}`);
       set(msg, s.msg);
       msg.classList.toggle("on", !!s.msg);

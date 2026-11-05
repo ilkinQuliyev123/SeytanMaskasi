@@ -22,6 +22,6 @@ function home() {
 if (new URLSearchParams(location.search).has("auto")) {
   addEventListener("error", (e) => (document.title = "ERR " + e.message));
   addEventListener("unhandledrejection", (e) => (document.title = "ERR " + String(e.reason)));
-  runGame(engine, canvas, MAPS[0], setup, quality, home);
+  runGame(engine, canvas, MAPS[0], setup, quality, home, new URLSearchParams(location.search).get("at") ?? undefined);
   setTimeout(() => { if (!document.title.startsWith("ERR")) document.title = `OK fps=${engine.getFps().toFixed(0)} ui=${document.getElementById("ui")!.innerText.slice(0, 120).replace(/\s+/g, " ")}`; }, 8000);
 } else home();

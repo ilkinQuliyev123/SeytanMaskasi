@@ -34,12 +34,19 @@ Sessiyanın əvvəlində bu faylı oxu. Hər addımdan sonra «Vəziyyət» və 
 - `npm run dev` (oyun: http://localhost:5173), `npm run build`, `npm test`.
 - Avtomatik yoxlama: `npx vite preview --port 4173` + Edge headless: `msedge --headless=new --use-angle=swiftshader --enable-unsafe-swiftshader --virtual-time-budget=15000 --user-data-dir=E:\tmp\edge-prof --dump-dom "http://localhost:4173/?auto"` → `<title>OK ...</title>`.
 
-## Vəziyyət (05.11.2026)
-- F1 prototipi HAZIR və brauzerdə xətasız açılır (headless test: OK, HUD görünür). İstifadəçi hələ öz brauzerində yoxlamayıb.
-- Bundle böyükdür (~6.3 MB, `@babylonjs/core` tam idxal) — sonra dərin idxal (deep imports) ilə kiçilt.
-- Hələ yoxdur: NavMesh (indi sadə yönəlmə + maneə itələmə), saatın qalan 7 forması, ayarlar ekranı (keyfiyyət indi URL ilə), səslər, silah modelləri (oyunçu silahı görünmür), xəritə 2–4.
+## Vəziyyət (05.11.2026, Mərhələ A — ilk yoxlama versiyası)
+- Xəritə 1 «Samuray: Dörd dağın hökmdarı»: ±1300 m relyef, 4 dağ, 4 keçid + yollar (`SITES`, `roadPoint`, `heightAt`), sıx meşə (thin instances).
+- Yapon saray kompleksi (`world.ts`): hasar, darvaza evi, içi açıq dojo (ninjalar), yan zallar, yagura, gölməçə, daş fənərlər, torii.
+- Osmanlı qəsri (`fort.ts` + `fortLayout`): dişli divar/qüllələr, darvaza, saray-qala (qübbə), yaşıl bayraqlar, içəridə və çöldə kənd, küçələr, məşəllər.
+- Ordu: defolt 500 (menyuda 50–800), təsadüfi növ/silah/yer: yeniçəri, qılıncçı, oxçu, sipahi süvari, atlı oxçu; divar/darvaza keşikçiləri; 4 top (xidmətçi ölsə susur); 70 mülki (güllə dəymir).
+- AI: yalnız görəndə hücum; həyəcan yalnız ən yaxın 4 yoldaşa (30 m), atəş səsi ən yaxın 6-ya; 260 m-dən uzaq yatır; divar arxasına atmır.
+- Oyunçu: oni maskalı samuray modeli; silahlar ox-kaman, CheyTac tipli snayper (sağ klik optika), Glock tipli, M16, AUG A3 (1–5). Dəstə halqalarla izləyir (samuray/ninja 0–50).
+- Gecə: ay + ay işığı, ulduzlar, (orta keyfiyyət: ay şüaları, duman, bloom/glow), 2 «gəzən» fənər işığı.
+- Testlər: 21 (logic + fort). tsc/build təmiz. Headless: `?auto` və `?auto&at=ottoman` → OK.
+- İstifadəçi hələ öz noutbukunda yoxlamayıb. Oynamaq: `npm run dev` → http://localhost:5173 (və ya build + `npx vite preview --port 4173`).
 
 ## Növbəti
-1. İstifadəçiyə de: `cd E:\SeytanMaskasi` → `npm run dev` → brauzerdə http://localhost:5173 aç; rəyini al (FPS, görünüş, idarəetmə).
-2. Rəyə görə düzəlt; sonra: ayarlar ekranı (keyfiyyət), silah modelləri + səslər, saatın formaları 4–10, NavMesh dəstə AI-si (F2).
-3. Sonra xəritələr: Qurtuluş Savaşı, Qarabağ, fiktiv şəhər (F3–F5). GitHub private repo yarat və push et (istifadəçi brauzerdə yaradır).
+1. İstifadəçinin rəyi (FPS, görünüş, AI, idarəetmə) → düzəlişlər.
+2. GitHub private repo `ilkinQuliyev123/SeytanMaskasi` (istifadəçi yaradır) → push (`git config http.version HTTP/1.1`).
+3. Mərhələ B: Monqol, Çin, Viking qəsrləri (`SITES`-də yerləri hazır). Mərhələ C: saat çarxı + 10 orijinal bədheybət forması (Omnitrix surəti YOX).
+4. Səslər, menyuda keyfiyyət seçimi, NavMesh, bundle kiçiltmə.
