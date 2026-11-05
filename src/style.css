@@ -1,0 +1,57 @@
+:root { --red: #c8102e; --gold: #d4af37; --bg: #0b0b0f; --panel: rgba(16,16,22,.92); --txt: #ece6d6; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--txt);
+  font-family: "Segoe UI", Georgia, "Noto Serif", serif; font-size: 16px; user-select: none; }
+#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; outline: none; }
+#ui { position: absolute; inset: 0; pointer-events: none; }
+
+.screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; pointer-events: auto; background: radial-gradient(ellipse at center, rgba(30,10,14,.82), rgba(5,5,8,.96)); text-align: center; overflow: auto; padding: 24px; box-sizing: border-box; }
+.screen.clear { background: rgba(5,5,8,.7); }
+h1 { margin: 0; font-size: 56px; letter-spacing: 4px; color: var(--gold); text-shadow: 0 0 18px rgba(200,16,46,.7); font-weight: 700; }
+h2 { margin: 0; font-size: 32px; color: var(--gold); letter-spacing: 2px; }
+.sub { color: #b9b19c; font-size: 18px; }
+.help { max-width: 720px; font-size: 14px; line-height: 1.6; color: #a79f8a; border-top: 1px solid rgba(212,175,55,.3); padding-top: 12px; }
+.win { color: var(--gold); } .lose { color: var(--red); }
+
+button { font: inherit; font-size: 18px; color: var(--txt); background: rgba(40,12,18,.8); border: 1px solid var(--gold);
+  padding: 10px 32px; min-width: 220px; cursor: pointer; letter-spacing: 1px; transition: background .15s, transform .1s, box-shadow .15s; }
+button:hover:not(:disabled) { background: var(--red); box-shadow: 0 0 14px rgba(200,16,46,.6); transform: translateY(-1px); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.ghost { background: transparent; border-color: #666; }
+
+.cards { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; max-width: 960px; }
+.card { position: relative; width: 280px; padding: 18px; text-align: left; background: var(--panel); border: 1px solid var(--gold);
+  border-left: 4px solid var(--red); min-width: 0; font-size: 15px; line-height: 1.5; }
+.card b { display: block; font-size: 19px; color: var(--gold); margin-bottom: 6px; }
+.card:hover:not(:disabled) { transform: none; }
+.badge { position: absolute; top: 10px; right: 10px; background: var(--red); color: #fff; font-size: 12px; padding: 2px 8px; }
+
+.panel { background: var(--panel); border: 1px solid var(--gold); padding: 22px 28px; display: grid; grid-template-columns: auto 1fr; gap: 12px 18px;
+  align-items: center; text-align: left; min-width: 420px; max-width: 90vw; }
+.panel label { color: #cfc7b2; }
+.panel input[type=range] { width: 220px; accent-color: var(--red); vertical-align: middle; }
+.panel .val { display: inline-block; width: 30px; text-align: right; color: var(--gold); font-weight: 700; }
+.panel select { background: #1a1a22; color: var(--txt); border: 1px solid var(--gold); padding: 6px 8px; font: inherit; }
+.panel .chk { display: flex; flex-direction: column; gap: 4px; }
+.panel .chk label { cursor: pointer; }
+.row { display: flex; gap: 12px; }
+
+/* HUD */
+.hud > * { position: absolute; pointer-events: none; text-shadow: 0 1px 4px #000; }
+.hud .tl { top: 14px; left: 16px; font-size: 20px; }
+.hud .tr { top: 14px; right: 16px; font-size: 20px; text-align: right; }
+.hud .bl { bottom: 18px; left: 16px; width: 260px; }
+.hud .br { bottom: 18px; right: 16px; text-align: right; font-size: 26px; }
+.hud .br small { display: block; font-size: 14px; color: var(--gold); }
+.hud .bar { height: 16px; background: rgba(0,0,0,.6); border: 1px solid var(--gold); }
+.hud .bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #7a0a1c, var(--red)); }
+.hud .hpt { font-size: 14px; margin-bottom: 4px; }
+.hud .form { bottom: 56px; left: 16px; font-size: 18px; font-weight: 700; }
+.hud .cds { bottom: 90px; left: 16px; font-size: 14px; color: #bbb; line-height: 1.5; }
+.hud .fps { bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #777; }
+.hud .msg { top: 12%; left: 50%; transform: translateX(-50%); font-size: 24px; color: var(--gold); opacity: 0; transition: opacity .4s; white-space: nowrap; }
+.hud .msg.on { opacity: 1; }
+.hud .cross { top: 50%; left: 50%; width: 22px; height: 22px; transform: translate(-50%,-50%); }
+.hud .cross::before, .hud .cross::after { content: ""; position: absolute; background: rgba(255,255,255,.85); box-shadow: 0 0 2px #000; }
+.hud .cross::before { left: 10px; top: 0; width: 2px; height: 22px; }
+.hud .cross::after { top: 10px; left: 0; height: 2px; width: 22px; }
