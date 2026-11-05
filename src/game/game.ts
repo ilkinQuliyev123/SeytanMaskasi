@@ -84,7 +84,7 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
   pipe.imageProcessingEnabled = true;
   pipe.imageProcessing.toneMappingEnabled = true;
   pipe.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-  pipe.imageProcessing.contrast = 1.3; pipe.imageProcessing.exposure = 1.25;
+  pipe.imageProcessing.contrast = 1.25; pipe.imageProcessing.exposure = 1.6;
   pipe.imageProcessing.vignetteEnabled = true; pipe.imageProcessing.vignetteWeight = 2.4;
   pipe.bloomEnabled = quality === "mid"; pipe.bloomThreshold = 0.6; pipe.bloomWeight = 0.45;
   if (quality === "mid") new GlowLayer("glow", scene, { blurKernelSize: 32 }).intensity = 0.8;

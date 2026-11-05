@@ -107,8 +107,8 @@ export class Sky {
     const dir = moonUp ? new Vector3(-0.35, -0.55, -0.75) : new Vector3(-Math.cos(s.azim), -Math.max(0.15, s.elev), -0.3);
     this.sun.direction = dir.normalize();
     this.sun.diffuse = moonUp ? new Color3(0.55, 0.66, 1) : new Color3(1, 0.95, 0.85);
-    this.sun.intensity = (moonUp ? 0.95 * night : 1.1 * s.day) * w.light;
-    this.amb.intensity = (0.62 + 0.15 * s.day) * (0.6 + 0.4 * w.light);
+    this.sun.intensity = (moonUp ? 2.2 * night : 2.4 * s.day) * w.light; // PBR işığa daha güclü ehtiyac duyur
+    this.amb.intensity = (1.0 + 0.3 * s.day) * (0.6 + 0.4 * w.light);
     this.amb.diffuse = Color3.Lerp(new Color3(0.4, 0.5, 0.75), Color3.White(), s.day);
     this.amb.groundColor = Color3.Lerp(new Color3(0.06, 0.07, 0.12), new Color3(0.3, 0.28, 0.25), s.day);
     const dusk = Math.max(0, 1 - Math.abs(s.elev) * 4) * (s.elev > -0.2 ? 1 : 0);

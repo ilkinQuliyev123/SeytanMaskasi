@@ -1,9 +1,9 @@
 // Osmanlı qəsri: dişli daş divar, dişli dəyirmi qüllələr, darvaza, çoxmərtəbəli saray-qala, yaşıl bayraqlar,
-// divarın içində və çölündə kənd evləri, küçələr, məşəllər. Hamısı thin instances (ucuz).
-import { Color3, Mesh, MeshBuilder, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
+// divarın içində və çölündə kənd evləri, küçələr, məşəllər. PBR toxumalar; hər toxuma bir birləşmiş meş (az çəkiliş).
+import { Color3, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
 import { type FortLayout, type Grid } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
-import { scatter, segObs } from "./world";
+import { segObs } from "./world";
 
 const STONE = "#b3a68c", STONE2 = "#9e917a", ROOF = "#8e4a2e", LEAD = "#5f6870";
 
@@ -11,43 +11,38 @@ export function buildFort(scene: Scene, f: FortLayout, grid: Grid, anchors: Vect
   const { site: st, base: B, wallH: H, gate } = f;
   const P = (a: number, r: number, y = B): [number, number, number] => [st.x + Math.sin(a) * r, y, st.z + Math.cos(a) * r];
   const mat = vcMat(scene, "vcFort", 0.04);
+  // rəng → PBR toxuma: qum daşı divarlar, suvaq, kirəmit, daş döşəmə, taxta
+  const TM: Record<string, [string, string]> = {
+    [STONE]: ["sandstone", "#e8dcc4"], [STONE2]: ["sandstone", "#cfc3aa"], [ROOF]: ["roof", "#ffffff"], "#a8977c": ["sandstone", "#d8ccb4"],
+    "#e2d6bf": ["plaster", "#ffffff"], "#c2b293": ["sandstone", "#efe4cc"], "#cdbf9f": ["plaster", "#f0e8d8"], "#a89878": ["sandstone", "#c8b898"],
+    "#7d7466": ["cobble", "#d0d0d0"], "#8d877b": ["cobble", "#e0e0e0"], "#3e2a1a": ["cedar", "#7a5a40"], "#4a3020": ["cedar", "#6a4a34"],
+  };
+  const sk = Object.assign(new Kit(scene), { texMap: TM }); // bərk (güllə keçmir)
 
   // divar seqmentləri + dişlər (merlon)
-  const wallM = new Kit(scene).box(1, 1, 1, STONE, [0, 0.5, 0]).build("fwall", mat);
-  const merl = new Kit(scene).box(1, 1, 1, STONE2, [0, 0.5, 0]).build("fmerl", mat);
-  const wm = [], mm = [];
   for (const w of f.wall) {
-    wm.push(ts(w.x, B, w.z, 1, w.a, 3.2, H, w.len + 0.3));
+    sk.box(3.2, H, w.len + 0.3, STONE, [w.x, B + H / 2, w.z], [0, w.a, 0]);
     const ox = -Math.cos(w.a) * 1.3, oz = Math.sin(w.a) * 1.3; // çöl tərəf
     for (let t = -w.len / 2 + 1; t < w.len / 2; t += 2.4)
-      mm.push(ts(w.x + Math.sin(w.a) * t + ox, B + H, w.z + Math.cos(w.a) * t + oz, 1, w.a, 0.6, 1.1, 1.2));
+      sk.box(0.6, 1.1, 1.2, STONE2, [w.x + Math.sin(w.a) * t + ox, B + H + 0.55, w.z + Math.cos(w.a) * t + oz], [0, w.a, 0]);
     segObs(grid, w.x - (Math.sin(w.a) * w.len) / 2, w.z - (Math.cos(w.a) * w.len) / 2, w.x + (Math.sin(w.a) * w.len) / 2, w.z + (Math.cos(w.a) * w.len) / 2, 1.8);
   }
-  scatter(wallM, wm, true); scatter(merl, mm);
-
   // dəyirmi qüllələr — üstündə dişli tac
-  const tower = new Kit(scene).cyl(1, 1, 1.08, STONE2, [0, 0.5, 0], undefined, 12).build("ftower", mat);
-  const crown = new Kit(scene);
-  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; crown.box(0.11, 0.12, 0.08, STONE, [Math.sin(a) * 0.55, 0.06, Math.cos(a) * 0.55], [0, a, 0]); }
-  crown.cyl(0.06, 1.15, 1.15, STONE, [0, -0.03, 0], undefined, 12);
-  const crownM = crown.build("fcrown", mat);
-  const tw = [], cr = [];
   for (const t of f.towers) {
-    tw.push(ts(t.x, B, t.z, 1, 0, 8, H + 4, 8));
-    cr.push(ts(t.x, B + H + 4, t.z, 1, 0, 8.5, 8.5, 8.5));
+    sk.cyl(H + 4, 8, 8.6, STONE2, [t.x, B + (H + 4) / 2, t.z], undefined, 14).cyl(0.5, 9.6, 9.6, STONE, [t.x, B + H + 4.2, t.z], undefined, 14);
+    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; sk.box(0.9, 1.1, 0.7, STONE, [t.x + Math.sin(a) * 4.5, B + H + 5, t.z + Math.cos(a) * 4.5], [0, a, 0]); }
     grid.add({ x: t.x, z: t.z, r: 4.4 });
   }
-  scatter(tower, tw, true); scatter(crownM, cr);
 
   // darvaza: tağ + açıq qapı tayları + daş körpü-yol
-  const g = new Kit(scene), gp = P(gate, st.R);
+  const g = Object.assign(new Kit(scene), { texMap: TM }), gp = P(gate, st.R);
   g.box(13, 3.2, 3.6, STONE2, [gp[0], B + H - 1.6, gp[2]], [0, gate, 0]).box(4.5, 2, 3.8, STONE, [gp[0], B + H + 1, gp[2]], [0, gate, 0]);
   for (const s of [-1, 1]) {
     const q = P(gate + (s * 4.6) / st.R, st.R - 2.5);
     g.box(0.3, H - 3.4, 4.2, "#3e2a1a", [q[0], B + (H - 3.4) / 2, q[2]], [0, gate + s * 0.3, 0]);
   }
   // saray-qala: çoxmərtəbəli fasad, künc qüllələri, mərkəzdə qübbə
-  const pk = new Kit(scene), cx = st.x, cz = st.z;
+  const pk = Object.assign(new Kit(scene), { texMap: TM }), cx = st.x, cz = st.z;
   const lp = (lx: number, lz: number, y: number): [number, number, number] => [cx + Math.sin(gate) * lz + Math.cos(gate) * lx, y, cz + Math.cos(gate) * lz - Math.sin(gate) * lx];
   pk.box(34, 12, 24, "#c2b293", lp(0, 0, B + 6), [0, gate, 0]).box(26, 6, 18, "#cdbf9f", lp(0, 0, B + 15), [0, gate, 0])
     .box(35, 0.8, 25, STONE2, lp(0, 0, B + 12.2), [0, gate, 0]).box(10, 7, 3, "#a89878", lp(0, 12.5, B + 3.5), [0, gate, 0])
@@ -66,32 +61,29 @@ export function buildFort(scene: Scene, f: FortLayout, grid: Grid, anchors: Vect
   for (const sx of [-1, 1]) { const p = lp(sx * 9, 0, 0); grid.add({ x: p[0], z: p[2], r: 11 }); }
 
   // küçələr (radial + halqa), daş döşəmə
-  const street = new Kit(scene);
+  const street = Object.assign(new Kit(scene), { texMap: TM });
   for (const a of f.streets) { const r1 = 26, r2 = st.R - 2, m = P(a, (r1 + r2) / 2, B + 0.1); street.box(6, 0.12, r2 - r1, "#7d7466", m, [0, a, 0]); }
   for (let i = 0; i < 32; i++) { const a = (i / 32) * Math.PI * 2, m = P(a, f.ring, B + 0.1); street.box(f.ring * 0.21, 0.12, 6, "#7d7466", m, [0, a, 0]); }
   street.box(12, 0.12, 30, "#8d877b", P(gate, st.R + 16, B + 0.12), [0, gate, 0]); // darvaza önü
-  const streetM = street.build("fstreet", vcMat(scene, "vcStreet", 0));
-  (streetM.material as StandardMaterial).zOffset = -1; streetM.isPickable = false;
+  for (const m of street.buildAll("fstreet", vcMat(scene, "vcStreet", 0))) { m.isPickable = false; m.material!.zOffset = -1; }
 
-  // evlər: daş alt mərtəbə, çıxmalı ağ üst mərtəbə, kirəmit dam, bəzilərində işıqlı pəncərə
-  const hb = new Kit(scene).box(1, 1, 1, "#a8977c", [0, 0.5, 0]).build("hbase", mat);
-  const hu = new Kit(scene).box(1, 1, 1, "#e2d6bf", [0, 0.5, 0]).box(1.02, 0.08, 1.02, "#4a3020", [0, 0.02, 0]).build("hup", mat);
-  const hr = new Kit(scene).roof(1, 1, 1, ROOF, [0, 0.5, 0], 0, 0.3).build("hroof", mat);
-  const hw = new Kit(scene).box(1, 1, 1, "#ffffff", [0, 0.5, 0]).build("hwin", glowMat(scene, "#ffb35a"));
-  const lb: Matrix[] = [], lu: typeof lb = [], lr: typeof lb = [], lw: typeof lb = [];
+  // evlər: daş alt mərtəbə, çıxmalı ağ suvaqlı üst mərtəbə (taxta tirli), kirəmit dam, bəzilərində işıqlı pəncərə
+  const hk = Object.assign(new Kit(scene), { texMap: TM }), roofs = Object.assign(new Kit(scene), { texMap: TM }), lw = new Kit(scene);
   let wi = 0;
   for (const h of [...f.houses, ...f.village]) {
-    const y = groundY(h.x, h.z, B, st), two = (h.x * 7 + h.z * 3) % 5 > 1;
-    lb.push(ts(h.x, y, h.z, 1, h.rot, h.w, 3.2, h.d));
-    if (two) lu.push(ts(h.x, y + 3.2, h.z, 1, h.rot, h.w + 0.8, 2.6, h.d + 0.8));
-    lr.push(ts(h.x, y + (two ? 5.8 : 3.2), h.z, 1, h.rot, h.w + 1.6, 1.9, h.d + 1.6));
+    const y = groundY(h.x, h.z, B, st), two = (Math.round(h.x * 7 + h.z * 3) % 5 + 5) % 5 > 1, r: [number, number, number] = [0, h.rot, 0];
+    hk.box(h.w, 3.2, h.d, "#a8977c", [h.x, y + 1.6, h.z], r);
+    if (two) hk.box(h.w + 0.8, 2.6, h.d + 0.8, "#e2d6bf", [h.x, y + 4.5, h.z], r).box(h.w + 0.85, 0.15, h.d + 0.85, "#4a3020", [h.x, y + 3.25, h.z], r);
+    roofs.roof(h.w + 1.6, h.d + 1.6, 1.9, ROOF, [h.x, y + (two ? 5.8 : 3.2) + 0.95, h.z], h.rot, 0.3);
     if (wi++ % 3 === 0) { // pəncərə — mərkəzə baxan tərəfdə
-      const fx = h.x - Math.sin(h.rot) * (h.d / 2 + (two ? 0.45 : 0.05)), fz = h.z - Math.cos(h.rot) * (h.d / 2 + (two ? 0.45 : 0.05));
-      lw.push(ts(fx, y + (two ? 4 : 1.4), fz, 1, h.rot, 1.1, 0.9, 0.1));
+      const off = h.d / 2 + (two ? 0.45 : 0.05), fx = h.x - Math.sin(h.rot) * off, fz = h.z - Math.cos(h.rot) * off;
+      lw.box(1.1, 0.9, 0.1, "#ffffff", [fx, y + (two ? 4.4 : 1.8), fz], r);
     }
     grid.add({ x: h.x, z: h.z, r: Math.max(h.w, h.d) / 2 + 0.3 });
   }
-  scatter(hb, lb, true); scatter(hu, lu, true); scatter(hr, lr); scatter(hw, lw);
+  for (const m of hk.buildAll("fhouse", mat)) m.metadata = { solid: true };
+  for (const m of roofs.buildAll("froof", mat)) m.isPickable = false;
+  lw.build("fhwin", glowMat(scene, "#ffb35a")).isPickable = false;
 
   // məşəllər: qüllələrdə, darvazada, saray qapısında — uzaqdan görünən işıq nöqtələri
   const torch = new Kit(scene);
@@ -114,16 +106,11 @@ export function buildFort(scene: Scene, f: FortLayout, grid: Grid, anchors: Vect
   poles.build("fpoles", mat).isPickable = false;
   flags.build("fflags", flagMat).isPickable = false;
 
-  const solid = Mesh.MergeMeshes([g.build("fgate", mat), pk.build("fpal", mat)], true, true)!;
-  solid.metadata = { solid: true };
+  for (const m of [...g.buildAll("fgate", mat), ...pk.buildAll("fpal", mat), ...sk.buildAll("fwall", mat)]) m.metadata = { solid: true };
   win.build("fwin", glowMat(scene, "#ffb35a")).isPickable = false;
   return { flagMat };
 }
 
-import { Matrix, Quaternion } from "@babylonjs/core";
 import { heightAt, type Site } from "./logic";
-/** thin instance matrisi: yer + y oxu ətrafında fırlanma + ölçü */
-const ts = (x: number, y: number, z: number, _s: number, ry: number, sx: number, sy: number, sz: number) =>
-  Matrix.Compose(new Vector3(sx, sy, sz), Quaternion.RotationAxis(Vector3.Up(), ry), new Vector3(x, y, z));
 /** evin oturduğu yer: içəridə düz, çöl kənddə relyefə görə */
 function groundY(x: number, z: number, B: number, st: Site) { return Math.hypot(x - st.x, z - st.z) < st.R ? B : heightAt(x, z) - 0.3; }

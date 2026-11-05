@@ -1,5 +1,6 @@
 // Low-poly model dəsti: hissələr vertex rəngi ilə boyanır və bir meşə birləşir (hər model = 1 çəkiliş).
-import { Color3, Mesh, MeshBuilder, Scene, StandardMaterial, VertexBuffer, type Material } from "@babylonjs/core";
+import { Color3, Mesh, MeshBuilder, Scene, StandardMaterial, Vector4, VertexBuffer, type Material } from "@babylonjs/core";
+import { pbr, TEX_M } from "./materials";
 
 type V3 = [number, number, number];
 
@@ -32,18 +33,29 @@ export class Kit {
   private parts: Mesh[] = [];
   /** hamısını yuxarı sürüşdür (məs. atın üstündəki süvari) */
   dy = 0;
+  /** bundan sonrakı hissələrin PBR toxuması ("" — yalnız vertex rəngi); UV ölçüyə görə təkrarlanır */
+  tex = "";
+  /** rəng → toxuma xəritəsi: [toxuma, çalar]; uyğun rəngli hissələr avtomatik toxuma alır */
+  texMap: Record<string, [string, string]> = {};
   constructor(private scene: Scene) {}
+  private T(hex: string) { return this.tex || this.texMap[hex]?.[0] || ""; }
   private add(m: Mesh, hex: string, p: V3, r: V3 = [0, 0, 0], s?: V3) {
     m.position.set(p[0], p[1] + this.dy, p[2]); m.rotation.set(...r);
     if (s) m.scaling.set(...s);
-    this.parts.push(paint(m, hex));
+    const map = this.texMap[hex];
+    m.metadata = { tex: this.T(hex) };
+    this.parts.push(paint(m, map && !this.tex ? map[1] : hex));
     return this;
   }
   box(w: number, h: number, d: number, hex: string, p: V3, r?: V3) {
-    return this.add(MeshBuilder.CreateBox("k", { width: w, height: h, depth: d }, this.scene), hex, p, r);
+    const u = (a: number, b: number) => new Vector4(0, 0, a / TEX_M, b / TEX_M);
+    const faceUV = this.T(hex) ? [u(w, h), u(w, h), u(d, h), u(d, h), u(w, d), u(w, d)] : undefined;
+    return this.add(MeshBuilder.CreateBox("k", { width: w, height: h, depth: d, faceUV, wrap: true }, this.scene), hex, p, r);
   }
   cyl(h: number, dt: number, db: number, hex: string, p: V3, r?: V3, t = 8, s?: V3) {
-    return this.add(MeshBuilder.CreateCylinder("k", { height: h, diameterTop: dt, diameterBottom: db, tessellation: t }, this.scene), hex, p, r, s);
+    const k = s ? (s[0] + s[2]) / 2 : 1, side = new Vector4(0, 0, (Math.PI * k * (dt + db)) / 2 / TEX_M, Math.max(h, (db - dt) / 2) / TEX_M);
+    const faceUV = this.T(hex) ? [new Vector4(0, 0, 1, 1), side, new Vector4(0, 0, 1, 1)] : undefined;
+    return this.add(MeshBuilder.CreateCylinder("k", { height: h, diameterTop: dt, diameterBottom: db, tessellation: t, faceUV }, this.scene), hex, p, r, s);
   }
   sph(d: number, hex: string, p: V3, s?: V3, seg = 6, slice = 1) {
     return this.add(MeshBuilder.CreateSphere("k", { diameter: d, segments: seg, slice }, this.scene), hex, p, undefined, s);
@@ -56,6 +68,17 @@ export class Kit {
     const m = Mesh.MergeMeshes(this.parts, true, true)!;
     m.name = name; m.material = mat; this.parts = [];
     return m;
+  }
+  /** toxumaya görə qruplaşdırıb birləşdirir: hər toxuma = 1 meş (az çəkiliş) */
+  buildAll(name: string, plain: Material): Mesh[] {
+    const groups = new Map<string, Mesh[]>();
+    for (const p of this.parts) { const t = p.metadata?.tex ?? ""; groups.set(t, [...(groups.get(t) ?? []), p]); }
+    this.parts = [];
+    return [...groups].map(([t, parts]) => {
+      const m = Mesh.MergeMeshes(parts, true, true, undefined, false, false)!;
+      m.name = name + "_" + (t || "vc"); m.material = t ? pbr(this.scene, t) : plain; m.metadata = null;
+      return m;
+    });
   }
 }
 

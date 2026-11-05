@@ -1,7 +1,8 @@
 // Dünya: 2.6 km relyef, 4 dağ, yollar, sıx meşə, mərkəzdə yapon saray kompleksi (dojo zalı, gölməçə, fənərlər).
-import { Color3, Matrix, Mesh, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector3, VertexBuffer } from "@babylonjs/core";
+import { Color3, Matrix, Mesh, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector2, Vector3, VertexBuffer } from "@babylonjs/core";
 import { Grid, HALF, heightAt, rng, roadCoords, roadPoint, SITES, type Site } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
+import { environment, pbr, terrainMaterial } from "./materials";
 
 export type Quality = "low" | "mid";
 const M = (x: number, y: number, z: number, s = 1, ry = 0, sy = s) =>
@@ -37,7 +38,9 @@ function roadOf(scene: Scene, st: Site) {
     left.push(new Vector3(p.x - nx, heightAt(p.x - nx, p.z - nz) + 0.25, p.z - nz));
     right.push(new Vector3(p.x + nx, heightAt(p.x + nx, p.z + nz) + 0.25, p.z + nz));
   }
-  const r = MeshBuilder.CreateRibbon("road", { pathArray: [left, right] }, scene);
+  const uvs: Vector2[] = [];
+  for (const side of [0, 1]) for (let i = 0; i < left.length; i++) uvs.push(new Vector2(side * 2.3, (i * 8) / 3));
+  const r = MeshBuilder.CreateRibbon("road", { pathArray: [left, right], uvs }, scene);
   r.isPickable = false;
   return r;
 }
@@ -51,25 +54,25 @@ export function buildWorld(scene: Scene, quality: Quality) {
   for (let i = 0; i < pos.length; i += 3) {
     const x = pos[i], z = pos[i + 2], h = heightAt(x, z);
     pos[i + 1] = h;
-    const slope = Math.abs(heightAt(x + 4, z) - h) + Math.abs(heightAt(x, z + 4) - h), v = 0.85 + r0() * 0.3;
-    let c = [0.13 * v, 0.2 * v, 0.1 * v];
-    if (slope > 5 || h > 80) c = [0.33 * v, 0.32 * v, 0.29 * v];
-    if (SITES.some((s) => Math.hypot(x - s.x, z - s.z) < s.R + 55)) c = [0.36 * v, 0.29 * v, 0.21 * v];
-    if (Math.abs(x) < 42 && z > -36 && z < 38) c = [0.42, 0.4, 0.36];
-    col.push(c[0], c[1], c[2], 1);
+    // toxuma çəkiləri: r — meşə torpağı, g — ot, b — qaya; qalanı (1 − cəm) — torpaq
+    const slope = Math.abs(heightAt(x + 4, z) - h) + Math.abs(heightAt(x, z + 4) - h);
+    const rock = Math.min(1, Math.max(0, (slope - 3) / 4, (h - 70) / 20));
+    const meadow = 0.5 + 0.5 * Math.sin(x * 0.013 + 1) * Math.cos(z * 0.011) + (r0() - 0.5) * 0.2;
+    let c = [(1 - rock) * (1 - meadow), (1 - rock) * meadow, rock];
+    if (SITES.some((s) => Math.hypot(x - s.x, z - s.z) < s.R + 50) || (Math.abs(x) < 42 && z > -36 && z < 38)) c = [0.1, 0.05, 0];
+    col.push(c[0], c[1], Math.max(0, c[2]), 1);
   }
   ground.updateVerticesData(VertexBuffer.PositionKind, pos);
   ground.setVerticesData(VertexBuffer.ColorKind, col);
   ground.createNormals(false);
-  const gm = new StandardMaterial("groundMat", scene);
-  gm.specularColor = Color3.Black();
-  ground.material = gm;
+  environment(scene);
+  ground.material = terrainMaterial(scene);
   ground.isPickable = false;
   ground.receiveShadows = true;
   ground.freezeWorldMatrix();
 
-  const roadMat = new StandardMaterial("roadMat", scene);
-  roadMat.diffuseColor = Color3.FromHexString("#6e6250"); roadMat.specularColor = Color3.Black(); roadMat.zOffset = -2;
+  const roadMat = pbr(scene, "cobble");
+  roadMat.zOffset = -2;
   for (const st of SITES) roadOf(scene, st).material = roadMat;
 
   buildPalace(scene, grid, anchors);
@@ -80,12 +83,13 @@ export function buildWorld(scene: Scene, quality: Quality) {
 // --- meşə: şam/sidr, yarpaqlı ağac, payız ağcaqayını ---
 function buildForest(scene: Scene, quality: Quality) {
   const mat = vcMat(scene, "vcTree", 0);
-  const pine = new Kit(scene).cyl(3, 0.35, 0.5, "#3b2a1c", [0, 1.5, 0], undefined, 5)
-    .cyl(5, 0, 4, "#16331f", [0, 5, 0], undefined, 6).cyl(4, 0, 2.8, "#1b3d25", [0, 7.6, 0], undefined, 6).build("pine", mat);
-  const broad = new Kit(scene).cyl(3, 0.35, 0.5, "#3b2a1c", [0, 1.5, 0], undefined, 5)
-    .sph(5, "#24502a", [0, 5, 0], [1, 0.85, 1], 4).sph(3.4, "#2c5e30", [0.9, 6.3, 0.4], undefined, 3).build("broad", mat);
-  const maple = new Kit(scene).cyl(2.6, 0.3, 0.45, "#3b2a1c", [0, 1.3, 0], undefined, 5)
-    .sph(4.4, "#b8501c", [0, 4.4, 0], [1, 0.8, 1], 4).sph(3, "#d0802a", [-0.8, 5.4, 0.5], undefined, 3).build("maple", mat);
+  const tk = () => Object.assign(new Kit(scene), { texMap: { "#3b2a1c": ["bark", "#9a8a7a"] } as Record<string, [string, string]> });
+  const pine = tk().cyl(3, 0.35, 0.5, "#3b2a1c", [0, 1.5, 0], undefined, 5)
+    .cyl(5, 0, 4, "#16331f", [0, 5, 0], undefined, 6).cyl(4, 0, 2.8, "#1b3d25", [0, 7.6, 0], undefined, 6).buildAll("pine", mat);
+  const broad = tk().cyl(3, 0.35, 0.5, "#3b2a1c", [0, 1.5, 0], undefined, 5)
+    .sph(5, "#24502a", [0, 5, 0], [1, 0.85, 1], 4).sph(3.4, "#2c5e30", [0.9, 6.3, 0.4], undefined, 3).buildAll("broad", mat);
+  const maple = tk().cyl(2.6, 0.3, 0.45, "#3b2a1c", [0, 1.3, 0], undefined, 5)
+    .sph(4.4, "#b8501c", [0, 4.4, 0], [1, 0.8, 1], 4).sph(3, "#d0802a", [-0.8, 5.4, 0.5], undefined, 3).buildAll("maple", mat);
   const k = quality === "mid" ? 1.6 : 1, r = rng(11), lists: Matrix[][] = [[], [], []];
   const free = (x: number, z: number) => {
     if (Math.abs(x) < 50 && z > -44 && z < 46) return false;
@@ -109,7 +113,7 @@ function buildForest(scene: Scene, quality: Quality) {
   };
   place(2600 * k, 1500, 180);
   place(1300 * k, HALF * 2 - 120, 0);
-  scatter(pine, lists[0]); scatter(broad, lists[1]); scatter(maple, lists[2]);
+  [pine, broad, maple].forEach((ms, i) => ms.forEach((m) => scatter(m, lists[i])));
 }
 
 // --- yapon saray kompleksi ---
@@ -126,6 +130,11 @@ export const DOJO = { x: 0, z: -20 };
 
 function buildPalace(scene: Scene, grid: Grid, anchors: Vector3[]) {
   const k = new Kit(scene), glow = new Kit(scene), deco = new Kit(scene);
+  const tm: Record<string, [string, string]> = {
+    [STONE]: ["jstone", "#c8c8c8"], [WOOD]: ["cedar", "#8a6448"], [PLAST]: ["whitewall", "#ffffff"], [SLATE]: ["slate", "#8a9098"],
+    "#3a2414": ["cedar", "#6a4a34"], "#2a1a10": ["cedar", "#5a3a28"], "#6b4a2c": ["cedar", "#b08a68"], "#8d877b": ["cobble", "#d0d0d0"], "#5a4636": ["jstone", "#888"],
+  };
+  k.texMap = tm; deco.texMap = tm;
   const X = 40, Z1 = -34, Z2 = 36;
   const wall = (x1: number, z1: number, x2: number, z2: number) => {
     const L = Math.hypot(x2 - x1, z2 - z1), a = Math.atan2(x2 - x1, z2 - z1), cx = (x1 + x2) / 2, cz = (z1 + z2) / 2;
@@ -181,8 +190,7 @@ function buildPalace(scene: Scene, grid: Grid, anchors: Vector3[]) {
   for (const sx of [-1, 1]) { deco.cyl(7, 0.7, 0.75, RED, [sx * 4, 3.5, 52], undefined, 8); grid.add({ x: sx * 4, z: 52, r: 0.6 }); }
   deco.box(11.5, 0.7, 0.9, "#1a1a1a", [0, 7.2, 52]).box(9.5, 0.5, 0.6, RED, [0, 6.1, 52]);
 
-  const solid = k.build("palace", vcMat(scene, "vcWorld", 0.05));
-  solid.metadata = { solid: true };
-  deco.build("palaceDeco", vcMat(scene, "vcWorld", 0.05)).isPickable = false;
+  for (const m of k.buildAll("palace", vcMat(scene, "vcWorld", 0.05))) m.metadata = { solid: true };
+  for (const m of deco.buildAll("palaceDeco", vcMat(scene, "vcWorld", 0.05))) m.isPickable = false;
   glow.build("palaceGlow", glowMat(scene, "#ffb35a")).isPickable = false;
 }
