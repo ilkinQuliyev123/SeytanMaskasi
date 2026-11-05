@@ -20,33 +20,69 @@ Sessiyanın əvvəlində bu faylı oxu. Hər addımdan sonra «Vəziyyət» və 
 - Fazalar: F1 oyunçu, zaman/hava, 2–3 rayon (prototip) → F2 dəstə AI-si və düşmən sayı seçimi → F3 Xəritə 1 bütün rayonlar → F4 Xəritə 2 (şəhər, sahil, final) → F5 Xəritə 3 və kampaniya.
 
 ## Kod quruluşu
-- `src/game/data.ts` — xəritələr, silahlar, döyüşçü növləri, saat formaları, defolt ordu.
-- `src/game/logic.ts` — Babylon-suz məntiq (relyef `heightAt`, `sunAt`, hava, `canSee`, `Gun`, `hitChance`, `Watch`) — `tests/logic.test.ts` (13 test).
-- `src/game/world.ts` — relyef (4 dağ), meşə (thin instances), yapon sarayı, düşərgələr; `obstacles`.
-- `src/game/sky.ts` — gecə/gündüz, hava (aydın/buludlu/yağış/duman), yağış hissəcikləri.
-- `src/game/units.ts` — Unit (instances), sadə AI (patrul → görür/eşidir → yaxınlaşır → vurur), dəstə «izlə/hücum».
-- `src/game/player.ts` — üçüncü şəxs kamera, WASD/Shift/C, atəş (pickWithRay), 1–3 silah, R, Q/E saat.
-- `src/game/game.ts` — dövrə, post-effektlər, güllə izləri (hovuz), HUD, pauza (Esc), qələbə/məğlubiyyət.
-- `src/ui/ui.ts`, `src/i18n/az.ts`, `src/style.css` — menyular və HUD (sonnet yazıb).
-- `src/main.ts` — giriş; `?q=mid` orta keyfiyyət; `?auto` test rejimi (menyusuz başlayır, xəta/FPS səhifə başlığına).
+- `src/game/logic.ts` — Babylon-suz: relyef (`rawHeight`, oyunda `heightAt` relyef meşindən oxuyur), `SITES`, yollar, `HAMLETS`, `NORTH` (meşə/ot/məhəllə), `townLayout` (labirint), `fortLayout` (4 darvaza), `Grid`, `Gun`, `Watch`, `canSee`.
+- `src/game/world.ts` — relyef (PBR qarışıq toxuma), yollar, meşə, yapon saray kompleksi + dojo, yapon kəndləri, 2 m ot (`inTallGrass`), labirint məhəllə.
+- `src/game/fort.ts` — Osmanlı qəsri (qum daşı divar, qüllələr, 4 darvaza, saray-qala, kənd halqaları, məşəllər, bayraqlar).
+- `src/game/materials.ts` — PBR toxumalar (Poly Haven CC0), HDRI, relyef qarışıq materialı.
+- `src/game/kit.ts` — primitivlərdən model dəsti (`texMap` ilə toxuma), sadə uzaq-LOD modellər, silah modelləri (+daraq), top.
+- `src/game/chars.ts` — animasiyalı personajlar (Quaternius CC0: Universal Base Characters, Modular Outfits, Universal Animation Library). (növ, hal) şablonları + instance-lar; aksesuarlar sümüyə çəki ilə; `warm()`, `tick()`.
+- `src/game/units.ts` — döyüşçü AI, LOD (`setLod`), animasiya halları (`setAnim`, 0.3 s histerezis).
+- `src/game/player.ts` — oyunçu: animasiyalı samuray, 6 silah (5 + saat), nişan/optika, tullanma, formalar, əjdaha sürmə.
+- `src/game/dragon.ts` — 7 m əjdaha (G çağırır, enir, mindirir; alov). `src/game/forms.ts` — saat + 10 orijinal forma modeli. `src/game/cannon.ts` — top (Poly Haven modeli).
+- `src/game/sky.ts` — gecə/gündüz, ay, ulduzlar, duman, yağış. `src/game/audio.ts` — prosedur səslər (sonnet). `src/game/game.ts` — hamısını birləşdirir.
+- `src/ui/ui.ts`, `src/ui/wheel.ts`, `src/style.css`, `src/i18n/az.ts` — kinematik UI (sonnet).
+- `tools/fetch_assets.py` (Poly Haven), `tools/fetch_itch.py` (Quaternius itch.io), `tools/extract_chars.py`. Xam zip-lər `assets-raw/` (gitignore).
 
 ## Əmrlər
-- `npm run dev` (oyun: http://localhost:5173), `npm run build`, `npm test`.
-- Avtomatik yoxlama: `npx vite preview --port 4173` + Edge headless: `msedge --headless=new --use-angle=swiftshader --enable-unsafe-swiftshader --virtual-time-budget=15000 --user-data-dir=E:\tmp\edge-prof --dump-dom "http://localhost:4173/?auto"` → `<title>OK ...</title>`.
+- Build + yerli server: `npx vite build` → `npx vite preview --host 127.0.0.1 --port 4173` → http://127.0.0.1:4173 (istifadəçi Ctrl+F5 etməlidir).
+- Yoxlama: Edge headless `--screenshot` / `--dump-dom` + `--enable-logging=stderr --v=0` (konsol xətaları üçün `grep CONSOLE`). Test parametrləri: `?auto`, `?auto&at=town`, `?auto&at=ottoman`, `?setup`.
+- **Diqqət:** headless proqram renderidir (FPS göstərmir). İstifadəçinin FPS-i (HD 4400) ilk versiyada ~52 idi; ağır dəyişikliklərdən sonra «donur» dedi — real FPS ölçülməyib.
 
-## Vəziyyət (05.11.2026, Mərhələ A — ilk yoxlama versiyası)
-- Xəritə 1 «Samuray: Dörd dağın hökmdarı»: ±1300 m relyef, 4 dağ, 4 keçid + yollar (`SITES`, `roadPoint`, `heightAt`), sıx meşə (thin instances).
-- Yapon saray kompleksi (`world.ts`): hasar, darvaza evi, içi açıq dojo (ninjalar), yan zallar, yagura, gölməçə, daş fənərlər, torii.
-- Osmanlı qəsri (`fort.ts` + `fortLayout`): dişli divar/qüllələr, darvaza, saray-qala (qübbə), yaşıl bayraqlar, içəridə və çöldə kənd, küçələr, məşəllər.
-- Ordu: defolt 500 (menyuda 50–800), təsadüfi növ/silah/yer: yeniçəri, qılıncçı, oxçu, sipahi süvari, atlı oxçu; divar/darvaza keşikçiləri; 4 top (xidmətçi ölsə susur); 70 mülki (güllə dəymir).
-- AI: yalnız görəndə hücum; həyəcan yalnız ən yaxın 4 yoldaşa (30 m), atəş səsi ən yaxın 6-ya; 260 m-dən uzaq yatır; divar arxasına atmır.
-- Oyunçu: oni maskalı samuray modeli; silahlar ox-kaman, CheyTac tipli snayper (sağ klik optika), Glock tipli, M16, AUG A3 (1–5). Dəstə halqalarla izləyir (samuray/ninja 0–50).
-- Gecə: ay + ay işığı, ulduzlar, (orta keyfiyyət: ay şüaları, duman, bloom/glow), 2 «gəzən» fənər işığı.
-- Testlər: 21 (logic + fort). tsc/build təmiz. Headless: `?auto` və `?auto&at=ottoman` → OK.
-- İstifadəçi hələ öz noutbukunda yoxlamayıb. Oynamaq: `npm run dev` → http://localhost:5173 (və ya build + `npx vite preview --port 4173`).
+## Vəziyyət (06.11.2026 gecə — istifadəçi layihəni DAYANDIRDI)
+Son commit `57a23fd` (GitHub private: ilkinQuliyev123/SeytanMaskasi). Xəritə 1 oynanır, amma istifadəçi narazıdır:
+- «Qrafika pisdir», «Bannerlord kimi olsun», «animasiya çox daha yaxşı olsun», «donur», «oyunçular divarın içinə girir, havada qalır», «əjdaha göydədir, minmək olmur».
+- Son düzəlişlər (istifadəçi hələ yoxlamayıb): relyefə dəqiq oturma (sampler), əjdahanı G ilə çağırma, LOD (90 m-dən uzaqda sadə model), şablonları əvvəlcədən hazırlama, istifadə olunmayan animasiyaları dayandırma.
 
-## Növbəti
-1. İstifadəçinin rəyi (FPS, görünüş, AI, idarəetmə) → düzəlişlər.
-2. GitHub private repo `ilkinQuliyev123/SeytanMaskasi` (istifadəçi yaradır) → push (`git config http.version HTTP/1.1`).
-3. Mərhələ B: Monqol, Çin, Viking qəsrləri (`SITES`-də yerləri hazır). Mərhələ C: saat çarxı + 10 orijinal bədheybət forması (Omnitrix surəti YOX).
-4. Səslər, menyuda keyfiyyət seçimi, NavMesh, bundle kiçiltmə.
+### Mənim səhvlərim (təkrarlanmasın)
+- İstifadəçiyə «hazırdır» deməmişdən əvvəl öz-özünə real oyun ssenarisini yoxlamadım (əjdahaya minmək, divar toqquşması, uzun oyun FPS).
+- Silahları gizli meşə bağladım (görünmədi); skeletli merge xətası (sideOrientation); animasiya halı hər kadrda dəyişib instance yaradırdı (donma); şablonlar oyun ortasında yaradılırdı (ilişmə); analitik hündürlük ≠ çəkilən relyef (havada qalma).
+- Qayda: hər dəyişiklikdən sonra headless skrinşot + konsol yoxla, **və** oyun mexanikasını (min/düş, toqquşma, döyüş) ssenari ilə test et; FPS-ə təsir edən hər şeyi «Aşağı» keyfiyyətdə söndürülə bilən et.
+
+## Çatışmazlıqların auditi (özüm tapdım — sabah istifadəçiyə bildir)
+**Funksionallıq / səhvlər**
+1. Yol tapma yoxdur: əsgərlər divara/evə dirənir, labirint məhəllədə ilişir → Recast NavMesh (`recast-detour` artıq quraşdırılıb) + crowd agentləri.
+2. Toqquşma yalnız dairələrlə: evlərin künclərindən keçmək olur; kamera divarın içinə girir → kamera üçün raycast (divara yaxınlaşanda kameranı yaxınlaşdır).
+3. Personaj modelləri güzgüdür (sağ↔sol: silah sol əldə görünə bilər) — `scaling.x=-1` əvəzinə düzgün handedness həlli.
+4. Süvarilər (sipahi, atlı oxçu) və 10 bədheybət forması hələ primitiv modeldir; animasiyasız.
+5. Əjdaha: enmə/qalxma animasiyası, zərər görmə, dəstədə ikinci rolu yoxdur; minmə real oyunda yoxlanmayıb.
+6. Atəş effektləri yoxdur: lülə alovu, tüstü, güllə izi/qığılcım, qan/toz, vurma işarəsi (hit marker), ölüm səsi.
+7. Ayarlar menyusu yoxdur: keyfiyyət, səs, siçan həssaslığı, FOV (keyfiyyət hələ URL ilə).
+8. Mini-xəritə/kompas/hədəf işarəsi yoxdur — 1 km yolda istiqamət itir.
+9. Səslər test olunmayıb; 3D (yerləşmiş) səs yoxdur.
+10. Ölü cəsədlər yığılır (500); uzaqda sadə modeldə yıxılma yoxdur.
+11. Qəsrin içindəki saraya girmək olmur; dojo-ya girmək olur, amma kamera divardan keçir.
+12. Mülkilər döyüşdə qaçmır (yalnız gizlənir).
+13. Saxlama/yükləmə yoxdur.
+14. Deploy: Cloudflare Pages + Access (yalnız istifadəçinin Gmail-i) — istifadəçi hesab açmalıdır.
+15. Bundle böyükdür (~6.5 MB JS + 60 MB assets) — ilk yükləmə uzun.
+
+**Qrafika — nə etmək olar (HD 4400-də real olan)**
+1. Kölgələr: `CascadedShadowGenerator` (2 kaskad, yalnız yaxın) + aşağı keyfiyyətdə personaj altında «blob» kölgə.
+2. Ağaclar: primitiv konuslar ən zəif yerdir → CC0 ağac modelləri (Quaternius Stylized Nature MegaKit və ya Poly Haven aşağı-poli) + uzaqda billboard impostor.
+3. Yaxında qısa ot (GPU instansing), yol kənarında kol/qaya modelləri (Poly Haven `boulder_01` aşağı LOD).
+4. Rəng düzəlişi: LUT (gecə — mavi kölgə / isti fənər), daha güclü ay işığı, kəskinlik; ay şüaları yalnız «Orta»da.
+5. Relyef: hər qatın normal xəritəsi, qayalıqda triplanar, detal toxuması.
+6. Effektlər: məşəl alovu hissəcikləri + işıq titrəməsi, atəşböcəkləri, qığılcımlar, tüstü.
+7. Su: gölməçə/düyü tarlası üçün əks etdirmə (yalnız «Orta»).
+8. Animasiya: Universal Animation Library 2 (CC0, 130+ klip: qılınc kombinasiyaları, döyüş, parkur) — itch-dən `tools/fetch_itch.py` ilə; üst bədən qatı (yeriyərkən nişan), ayaq IK, kök hərəkəti; oyunçu üçün 2K toxuma.
+9. Binalar: qutu evlər əvəzinə modul tikinti dəsti (CC0 orta əsr/şərq evləri) — ən çox fərq yaradan addımlardan biri.
+- **Dürüst qeyd:** Bannerlord-un minimum tələbi GTX 660 + 6 GB RAM-dır; istifadəçinin noutbuku (HD 4400, 4 GB) bundan aşağıdır. Bannerlord səviyyəsi bu kompüterdə heç bir mühərriklə mümkün deyil; hədəf — «stilizə, amma zəngin və hamar». Güclü kompüter olarsa: Unreal Engine 5 + pulsuz Marketplace/Fab aktivləri.
+
+## Növbəti (sabah — istifadəçiyə əvvəlcə bu siyahını qısa xülasə ilə bildir, sonra təsdiqlə başla)
+1. İstifadəçidən son versiyanın FPS-ini al (`?q=mid` olmadan); FPS ölçən «performans rejimi» əlavə et.
+2. NavMesh + kamera toqquşması + divar/ev toqquşmasını düzəlt (ən çox şikayət olunan).
+3. Atəş effektləri + hit marker + ayarlar menyusu + kompas/mini-xəritə.
+4. Qrafika planından 1–4 və 9 (ağaclar, binalar, kölgə, LUT) — hər addımdan sonra skrinşot + istifadəçiyə FPS sualı.
+5. UAL2 animasiyaları, süvari və bədheybət modellərini təkmilləşdir; əjdahanı real ssenari ilə test et.
+6. Deploy (Cloudflare Pages + Access) — istifadəçi hesab açanda.
+7. Sonra Mərhələ B (Monqol, Çin, Viking qəsrləri) və digər xəritələr.
