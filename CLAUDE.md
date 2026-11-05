@@ -78,6 +78,34 @@ Son commit `57a23fd` (GitHub private: ilkinQuliyev123/SeytanMaskasi). Xəritə 1
 9. Binalar: qutu evlər əvəzinə modul tikinti dəsti (CC0 orta əsr/şərq evləri) — ən çox fərq yaradan addımlardan biri.
 - **Dürüst qeyd:** Bannerlord-un minimum tələbi GTX 660 + 6 GB RAM-dır; istifadəçinin noutbuku (HD 4400, 4 GB) bundan aşağıdır. Bannerlord səviyyəsi bu kompüterdə heç bir mühərriklə mümkün deyil; hədəf — «stilizə, amma zəngin və hamar». Güclü kompüter olarsa: Unreal Engine 5 + pulsuz Marketplace/Fab aktivləri.
 
+## Kod auditi — məntiq xətaları (06.11 gecə, kodu oxuyaraq tapdım; sabah düzəlt)
+1. **Yaddaş/klaviatura sızması:** `Player` konstruktoru `window`-a keydown/keyup/mouseup qoşur və heç vaxt silmir → menyuya qayıdıb yenidən oynayanda köhnə oyunçu da düymələri tutur. Düzəliş: `Player.dispose()` + `quit()`-də çağır.
+2. **Görünməzlik titrəməsi:** `CharLib.tick()` istifadə olunmayan şablonu `setEnabled(false)` edir; əsgər yeni hala keçəndə instance 0.5 s-ə qədər görünmür. Düzəliş: `instance()` içində şablonu dərhal `setEnabled(true)` et.
+3. **Ölü əjdaha uçmağa davam edir:** `Dragon.hp` 0 olanda heç nə olmur; HUD-da canı da yoxdur. Düzəliş: yerə düşmə + HUD zolağı + sürmə bağlanır.
+4. **Ölüm animasiyası görünmür:** «dead» şablonu yükləmədə bir dəfə oynayıb bitir → yeni ölən əsgər birdən uzanmış görünür. Düzəliş: hər ölüm üçün qısa ömürlü «dying» şablonu (2–3 fazalı hovuz) və ya ölümdə instance-ı qısa müddət öz skeletli klonuna keçir.
+5. **Çarx pauzada açıq qalır:** Esc basılanda `wheel` bağlanmır, `player.wheelOpen` true qalır → siçan kamerası işləmir. Düzəliş: `lockChange`-də `wheel.close()`.
+6. **Düşmən atəş səsi həmişə «musket»** (oxçu da tüfəng səsi verir). Düzəliş: `onShot`-a silah növünü ötür.
+7. **Əjdahadan düşəndə** oyunçu havadan birdən yerə teleport olur, `jumpH`/`flyH` sıfırlanmır; əjdaha minilmiş halda düşmən onu hədəf seçir, amma zərəri HUD-da yoxdur.
+8. **`F` hücum əmri:** dəstə darvazaya çatıb orada dayanır (alert sıfırlanmır, içəri girmir). Düzəliş: darvazaya çatanda növbəti nöqtə — qəsr mərkəzi/ən yaxın düşmən.
+9. **Qələbə şərti:** bütün 500 əsgəri öldürmək lazımdır, o cümlədən uzaqda gəzən süvariləri → çox uzun/yorucu. Düzəliş: qəsr «ələ keçirilir» — saray həyətində bayrağı tutmaq (X s dayan) + qalan düşmənlər qaçır/təslim olur.
+10. **Sursat sonsuzdur** (yalnız daraq var) — strateji məna yoxdur. Əlavə: ehtiyat sursat + qəsrlərdə sursat qutuları.
+11. **`?auto`/`?setup` test parametrləri** istehsalda da işləyir (zərərsiz, amma gizlət).
+12. **Gündüz düşmənin görmə məsafəsi 50 m, gecə 22 m** — snayper 450 m-dən hər kəsi təhlükəsiz vurur; vurulan əsgərin yoldaşları həyəcan almır. Düzəliş: yaxınlıqda ölən yoldaş → həyəcan (səs-küysüz də), snayperin yerini təxmin etmə.
+13. **Toplar** yalnız `alarmed` olanda atır, amma qəsrdən 130 m-də hər kəsi (mülki istisna) hədəf ala bilir, o cümlədən əjdahanı — əjdahaya top mərmisi parabola ilə çata bilmir (hündürlük nəzərə alınmır).
+14. **Qəsr bayrağı** təmizlənəndə rəngi dəyişir, amma digər qəsrlər hələ yoxdur — «Qəsrlər 0/1» xəritə 1 üçün düzdür, Mərhələ B-də SITES-dən avtomatik gəlməlidir.
+
+## Əlavə olunmalı məntiqli şeylər (istifadəçi «mütləq əlavə et» dedi)
+- **Gizli öldürmə:** arxadan yaxınlaşıb V ilə səssiz öldürmə (ninja/samuray üslubu).
+- **Dəstə əmrləri:** «izlə / dayan / hücum / geri çəkil» radial menyusu, hədəf nöqtəsi göstərmək.
+- **Can bərpası:** döyüşdən kənarda yavaş bərpa + dərman (kəndlərdə).
+- **Kompas + hədəf işarəsi + mini-xəritə**; qəsr/məhəllə adları ekranda göstərilir.
+- **Çətinlik səviyyəsi** (asan/orta/çətin) və **ayarlar** (keyfiyyət, səs, həssaslıq, FOV, düşmən sayı).
+- **Saxlama nöqtələri** (məhəlləyə çatanda, darvazada) — ölüm = sıfırdan başlama olmasın.
+- **Süvari davranışı:** açıq sahədə hücum (charge), oxçular məsafə saxlayır, qılıncçılar dəstə ilə gəlir.
+- **Mülkilər:** döyüş yaxınlaşanda qaçıb evlərə girir; mülkiyə zərər yoxdur (qayda).
+- **Əjdaha əmrləri:** «yanımda uç / hücum et / yerə en» (H düyməsi).
+- **Vurma hissi:** hit marker, ekran titrəməsi, qan/qığılcım, ölüm səsi, düşmənin geri itələnməsi.
+
 ## Növbəti (sabah — istifadəçiyə əvvəlcə bu siyahını qısa xülasə ilə bildir, sonra təsdiqlə başla)
 1. İstifadəçidən son versiyanın FPS-ini al (`?q=mid` olmadan); FPS ölçən «performans rejimi» əlavə et.
 2. NavMesh + kamera toqquşması + divar/ev toqquşmasını düzəlt (ən çox şikayət olunan).
