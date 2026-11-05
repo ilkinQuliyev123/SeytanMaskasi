@@ -13,6 +13,7 @@ import { cannonModel } from "./kit";
 import { CharLib } from "./chars";
 import { setChars } from "./units";
 import { Sfx } from "./audio";
+import { Dragon } from "./dragon";
 import { T } from "../i18n/az";
 import { createHud, endScreen, pauseMenu } from "../ui/ui";
 import { createWheel } from "../ui/wheel";
@@ -131,6 +132,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     ...spawn(scene, "ninja", setup.ninjaWeapon, setup.ninja, DOJO.x, DOJO.z, 6)];
   if (at) for (const a of allies) { a.pos.x += player.pos.x; a.pos.z += player.pos.z - 4; }
   let order: "follow" | "attack" = "follow";
+  const dragon = new Dragon(scene, 18, 6); // həyətdə gözləyir
 
   // güllə/ox izləri (hovuz)
   const tracerMat = new StandardMaterial("tr", scene);
@@ -173,6 +175,11 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   const onWheelMove = (e: MouseEvent) => { if (wheel.isOpen()) wheel.move(e.movementX, e.movementY); };
   addEventListener("keydown", onWheelKey); addEventListener("keyup", onWheelKey); addEventListener("mousemove", onWheelMove);
   const onKey = (e: KeyboardEvent) => {
+    if (e.code === "KeyG" && !paused) { // əjdahaya min / düş
+      if (player.riding) { player.riding = null; dragon.rider = false; player.pos.y = heightAt(player.pos.x, player.pos.z); say("Əjdahadan düşdün", 2); }
+      else if (Vector3.Distance(dragon.pos, player.pos) < 14) { player.riding = dragon; dragon.rider = true; say("Əjdaha: WASD uç · Space/Ctrl qalx/en · Shift sürət · Sol klik alov · G düş", 5); }
+      else say("Əjdahaya yaxınlaş (14 m) və G bas", 2);
+    }
     if (e.code === "KeyF" && !paused) {
       order = order === "follow" ? "attack" : "follow";
       for (const a of allies) a.alert = order === "attack" ? nearestFortGate(a.pos) : null;
@@ -222,7 +229,8 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     const night = sky.isNight, fog = sky.fog;
     if (player.watch.active?.id === "qalxan") for (const a of allies) if (a.alive && Vector3.Distance(a.pos, pp) < 10) a.hp = Math.min(a.type.hp, a.hp + 12 * dt); // qalxan dəstəni sağaldır
     allies.forEach((u, i) => u.update(dt, { foes: enemies, night, fog, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked }));
-    const foes: Target[] = [player, ...allies];
+    if (!player.riding) dragon.update(dt, pp, hittable);
+    const foes: Target[] = [player, ...allies, dragon];
     for (const f of forts) for (const u of f.units) {
       if (!u.alive) continue;
       const busy = u.target || u.alert;

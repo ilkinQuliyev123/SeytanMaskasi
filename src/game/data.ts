@@ -9,6 +9,7 @@ export const WEAPONS: Record<string, Weapon> = {
   pbow: { id: "pbow", name: "Ox-kaman", dmg: 95, rate: 1.1, mag: 1, reload: 0.6, spread: 0.002, range: 120, noise: 4 },
   sniper: { id: "sniper", name: "CheyTac tipli snayper", dmg: 220, rate: 0.6, mag: 7, reload: 3.2, spread: 0.0008, range: 450, noise: 85 },
   glock: { id: "glock", name: "Glock tipli tapança", dmg: 30, rate: 5, mag: 17, reload: 1.5, spread: 0.02, range: 60, noise: 40 },
+  saat: { id: "saat", name: "Transformasiya saatı", dmg: 0, rate: 1, mag: 0, reload: 0, spread: 0, range: 0, noise: 0, melee: true },
   rifle: { id: "rifle", name: "Dövrün tüfəngi", dmg: 70, rate: 0.9, mag: 5, reload: 2.8, spread: 0.004, range: 160, noise: 70 },
   m16: { id: "m16", name: "M16 tipli avtomat", dmg: 24, rate: 11, mag: 30, reload: 2.2, spread: 0.02, range: 110, noise: 55 },
   aug: { id: "aug", name: "AUG A3 tipli tüfəng", dmg: 27, rate: 10, mag: 30, reload: 2.4, spread: 0.014, range: 120, noise: 50 },
@@ -23,7 +24,7 @@ export const WEAPONS: Record<string, Weapon> = {
 };
 
 /** yalnız oyunçunun silahları (1–5 düymələri) */
-export const PLAYER_WEAPONS = ["pbow", "sniper", "glock", "m16", "aug"] as const;
+export const PLAYER_WEAPONS = ["pbow", "sniper", "glock", "m16", "aug", "saat"] as const;
 
 export interface UnitType { id: string; name: string; hp: number; speed: number; color: string; weapons: string[]; ally: boolean; mounted?: boolean; civ?: boolean }
 

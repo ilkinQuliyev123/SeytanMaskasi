@@ -9,6 +9,7 @@ import { hat, type CharLib } from "./chars";
 import { AnimationGroup, TransformNode } from "@babylonjs/core";
 import { Kit, vcMat } from "./kit";
 import { inTallGrass } from "./world";
+import type { Dragon } from "./dragon";
 
 export class Player implements Target {
   pos = new Vector3(0, 0, 14); yaw = 0; pitch = 0.12; hp = 200; maxHp = 200;
@@ -17,7 +18,7 @@ export class Player implements Target {
   private keys = new Set<string>(); private mat: StandardMaterial; shooting = false;
   lastNoise = 0; // son atəşin səs radiusu (düşmənlər eşidir)
   private rig: TransformNode | null = null; private clips: Partial<Record<string, AnimationGroup>> = {}; private clip = ""; private shotT = 0;
-  jumpV = 0; jumpH = 0; private watchBand: Mesh | null = null;
+  jumpV = 0; jumpH = 0; recoil = 0; riding: Dragon | null = null; private hand: TransformNode | null = null; private gunBase: Vector3[] = []; private watchBand: Mesh | null = null;
   wheelOpen = false; flyH = 0; private forms: Record<string, Mesh> = {}; private flash: Mesh; private flashT = 0;
   private dome: Mesh; private dial: Mesh; private wasForm = "";
 
@@ -62,7 +63,8 @@ export class Player implements Target {
     const attach = (m: Mesh, node: TransformNode, off: Vector3) => { m.parent = null; m.position.copyFrom(node.getAbsolutePosition().add(off)); m.rotation.setAll(0); m.setParent(node); };
     const k = new Kit(this.scene); hat.kabuto(k);
     attach(k.build("pHelmet", vcMat(this.scene, "vcArmor", 0.25)), c.head, new Vector3(0, 0.1, 0));
-    for (const g of this.gunMeshes) { g.rotation.setAll(0); attach(g, c.hand, new Vector3(0, 0, 0.05)); }
+    for (const g of this.gunMeshes) { g.rotation.setAll(0); attach(g, c.hand, new Vector3(0, 0, 0.05)); this.gunBase.push(g.position.clone()); }
+    this.hand = c.hand;
     if (this.watchBand) attach(this.watchBand, this.scene.getTransformNodeByName("P_hand_l") ?? c.hand, new Vector3(0, 0, 0));
     for (const m of c.meshes) m.isPickable = false;
     this.clips = c.clips;
@@ -99,6 +101,7 @@ export class Player implements Target {
   pressed(code: string) { return this.keys.has(code); }
 
   update(dt: number, grid: Grid, units: Target[], onShot: (a: Vector3, b: Vector3, hit: boolean) => void) {
+    if (this.riding) return this.ride(dt, units);
     for (const g of this.guns) g.update(dt);
     this.watch.update(dt);
     const f = this.watch.active;
@@ -150,7 +153,15 @@ export class Player implements Target {
     for (const m of [this.mesh, body]) { m.scaling.setAll(sc); m.position.copyFrom(this.pos); m.rotation.y = this.yaw; }
     if (f) body.isVisible = f.id === "kolge" ? Math.random() < 0.15 : scope !== 2; // kölgə titrəyir
     if (f?.id === "qanad") body.position.y += Math.sin(performance.now() / 150) * 0.1;
-    this.gunMeshes.forEach((g, i) => { g.isVisible = i === this.cur && !attackForm && scope !== 2 && f?.id !== "kolge"; g.parent = body; g.position.set(0.32, f?.id === "kicik" ? 0.8 : 1.28, 0.3); });
+    this.gunMeshes.forEach((g, i) => {
+      g.isVisible = i === this.cur && !attackForm && scope !== 2 && f?.id !== "kolge";
+      if (this.hand && !f) { g.parent = this.hand; g.position.copyFrom(this.gunBase[i]); } // animasiyalı əldə
+      else { g.parent = body; g.position.set(0.32, f?.id === "kicik" ? 0.8 : 1.28, 0.3); }
+    });
+    { const gm = this.gunMeshes[this.cur], g = this.gun, t = g.reloading > 0 ? 1 - g.reloading / g.w.reload : 0, k = Math.sin(t * Math.PI);
+      this.recoil = Math.max(0, this.recoil - dt * 4);
+      gm.rotation.set(-k * 0.7 - this.recoil * 0.6, k * 0.4, k * 0.5); gm.position.z += -this.recoil * 0.08;
+      const mag = gm.getChildMeshes()[0]; if (mag) { mag.position.y = -k * 0.35; mag.isVisible = t < 0.45 || t > 0.6; } }
     (this.dial.material as StandardMaterial).emissiveColor = Color3.FromHexString(f ? f.color : (this.watch.cd[FORMS[this.formIdx].id] ?? 0) > 0 ? "#551015" : "#ff1e2a");
     this.flash.setEnabled(this.flashT > 0);
     if (this.flashT > 0) { this.flashT -= dt; this.flash.position.copyFrom(this.pos).y += 1.2; this.flash.scaling.setAll(1 + (0.45 - this.flashT) * 14); }
@@ -173,6 +184,23 @@ export class Player implements Target {
     this.camera.setTarget(cam.add(look.scale(30)));
     this.lastNoise = 0;
     if (this.shooting && document.pointerLockElement === this.canvas) this.fire(units, onShot);
+  }
+
+  /** əjdaha üstündə: WASD uç, Space/Ctrl qalx/en, Shift sürət, sol klik alov */
+  private ride(dt: number, units: Target[]) {
+    const d = this.riding!, k = (c: string) => (this.pressed(c) ? 1 : 0);
+    d.update(dt, this.pos, units, { fw: k("KeyW") - k("KeyS"), st: k("KeyD") - k("KeyA"), up: k("Space") - k("ControlLeft"), boost: this.pressed("ShiftLeft"),
+      yaw: this.yaw, pitch: this.pitch, fire: this.shooting && document.pointerLockElement === this.canvas });
+    this.pos.copyFrom(d.saddle);
+    this.rig?.setEnabled(true); this.rig?.position.copyFrom(this.pos.add(new Vector3(0, -0.9, 0))); if (this.rig) this.rig.rotation.y = this.yaw;
+    this.animate(dt, "Sitting_Idle_Loop");
+    for (const g of this.gunMeshes) g.isVisible = false;
+    const fwd = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+    const cam = this.pos.add(fwd.scale(-16)).add(new Vector3(0, 6 + this.pitch * 8, 0));
+    cam.y = Math.max(cam.y, heightAt(cam.x, cam.z) + 1);
+    this.camera.position.copyFrom(cam);
+    this.camera.setTarget(this.pos.add(new Vector3(Math.sin(this.yaw) * 30, 2 - this.pitch * 20, Math.cos(this.yaw) * 30)));
+    this.watch.update(dt); this.lastNoise = 0;
   }
 
   private fire(units: Target[], onShot: (a: Vector3, b: Vector3, hit: boolean) => void) {
@@ -202,8 +230,9 @@ export class Player implements Target {
       return;
     }
     const g = this.gun;
+    if (g.w.id === "saat") { if (!this.watch.active) this.watch.transform(this.formIdx); return; } // saat — seçilmiş bədheybətə çevril
     if (!g.fire()) return;
-    this.shotT = 0.35;
+    this.shotT = 0.35; this.recoil = g.w.id === "sniper" ? 0.5 : g.w.id === "pbow" ? 0.15 : 0.18;
     // səpələnmə: nişanda az, əyilib nişanda ən az; snayper nişansız pis vurur
     let spread = g.w.spread * (this.aiming ? (this.crouch ? 0.15 : 0.4) : g.w.id === "sniper" ? 25 : 1);
     if (g.w.id === "sniper" && !this.aiming) spread = Math.max(spread, 0.03);

@@ -30,7 +30,7 @@ export function glowMat(scene: Scene, hex = "#ffae4a", name = "glow" + hex) {
 }
 
 export class Kit {
-  private parts: Mesh[] = [];
+  parts: Mesh[] = [];
   /** hamısını yuxarı sürüşdür (məs. atın üstündəki süvari) */
   dy = 0;
   /** bundan sonrakı hissələrin PBR toxuması ("" — yalnız vertex rəngi); UV ölçüyə görə təkrarlanır */
@@ -163,20 +163,33 @@ export function unitModel(scene: Scene, id: string): Mesh {
   return k.build("model_" + id, vcMat(scene, "vcArmor", 0.25));
 }
 
-/** oyunçunun silahları (sağ əldə, +z irəli) */
+/** oyunçunun silahları (sağ əldə, +z irəli). Daraq ayrıca uşaq meşdir ("mag") — doldurmada çıxıb geri girir. */
 export function weaponModel(scene: Scene, id: string): Mesh {
-  const k = new Kit(scene), M = "#1c1d20", W = "#5a3a22";
-  if (id === "pbow") k.box(0.03, 1.3, 0.05, W, [0, 0, 0.05]).box(0.03, 0.4, 0.04, W, [0, 0.5, -0.08], [0.6, 0, 0]).box(0.03, 0.4, 0.04, W, [0, -0.5, -0.08], [-0.6, 0, 0]).box(0.005, 1.2, 0.005, BONE, [0, 0, -0.18]);
-  else if (id === "glock") k.box(0.04, 0.12, 0.2, M, [0, 0, 0.1]).box(0.04, 0.13, 0.06, M, [0, -0.1, 0.03], [0.25, 0, 0]);
-  else {
-    const L = id === "sniper" ? 1.35 : id === "aug" ? 0.75 : 0.95;
-    k.box(0.06, 0.12, L * 0.6, M, [0, 0, L * 0.15]).cyl(L * 0.5, 0.035, 0.035, M, [0, 0.02, L * 0.6], [Math.PI / 2, 0, 0], 6)
-      .box(0.05, 0.14, 0.3, id === "aug" ? "#3d4a34" : M, [0, -0.02, -L * 0.25]).box(0.04, 0.16, 0.05, M, [0, -0.13, L * 0.08]);
-    if (id === "sniper" || id === "aug") k.cyl(id === "sniper" ? 0.4 : 0.2, 0.07, 0.07, "#0d0d0f", [0, 0.11, L * 0.12], [Math.PI / 2, 0, 0], 8);
-    if (id === "m16") k.box(0.03, 0.06, 0.2, M, [0, 0.09, L * 0.05]);
-    if (id === "sniper") k.box(0.02, 0.25, 0.02, M, [0.06, -0.12, L * 0.75], [0, 0, 0.4]).box(0.02, 0.25, 0.02, M, [-0.06, -0.12, L * 0.75], [0, 0, -0.4]);
+  const k = new Kit(scene), mag = new Kit(scene), M = "#1c1d20", S = "#2c2e33", W = "#5a3a22", G = "#3d4a34";
+  if (id === "saat") k.cyl(0.05, 0.12, 0.12, "#121214", [0, 0, 0], [Math.PI / 2, 0, 0], 10).cyl(0.02, 0.09, 0.09, "#ff1e2a", [0, 0, 0.03], [Math.PI / 2, 0, 0], 10);
+  else if (id === "pbow") { // kompozit yay: qövs, tutacaq, kiriş, ox
+    for (const s of [-1, 1]) k.box(0.035, 0.55, 0.05, W, [0, s * 0.35, -0.02], [s * 0.35, 0, 0]).box(0.03, 0.2, 0.04, "#2a1a10", [0, s * 0.68, -0.14], [s * 0.9, 0, 0]);
+    k.box(0.05, 0.18, 0.06, "#2a1a10", [0, 0, 0.02]).box(0.004, 1.5, 0.004, "#e8e0d0", [0, 0, -0.2]).box(0.012, 0.012, 0.85, "#8a6a40", [0.03, 0, 0.2]).box(0.03, 0.03, 0.06, "#c8ccd2", [0.03, 0, 0.64]);
+  } else if (id === "glock") {
+    k.box(0.035, 0.05, 0.2, S, [0, 0.05, 0.09]).box(0.033, 0.035, 0.19, M, [0, 0.015, 0.09]).box(0.034, 0.13, 0.055, M, [0, -0.06, 0.0], [0.28, 0, 0])
+      .box(0.01, 0.025, 0.012, M, [0, 0.085, 0.18]).box(0.022, 0.04, 0.04, M, [0, -0.01, 0.06]);
+    mag.box(0.028, 0.03, 0.045, "#3a3c40", [0, -0.14, -0.02], [0.28, 0, 0]);
+  } else {
+    const L = id === "sniper" ? 1.3 : id === "aug" ? 0.72 : 0.95, body = id === "aug" ? G : M;
+    k.box(0.065, 0.1, L * 0.42, body, [0, 0, L * 0.12]).box(0.06, 0.03, L * 0.5, S, [0, 0.065, L * 0.15]) // gövdə + ray
+      .cyl(L * 0.52, 0.03, 0.034, M, [0, 0.02, L * 0.62], [Math.PI / 2, 0, 0], 8).cyl(0.07, 0.05, 0.05, M, [0, 0.02, L * 0.9], [Math.PI / 2, 0, 0], 8) // lülə + alov söndürən
+      .box(0.05, 0.13, 0.26, body, [0, -0.025, -L * 0.2]).box(0.04, 0.15, 0.05, M, [0, -0.11, L * 0.02], [0.25, 0, 0]) // qundaq + tutacaq
+      .box(0.07, 0.07, L * 0.22, S, [0, 0.0, L * 0.4]); // ön qoruyucu
+    if (id === "sniper") k.cyl(0.42, 0.075, 0.075, "#0d0d0f", [0, 0.14, L * 0.12], [Math.PI / 2, 0, 0], 12).cyl(0.06, 0.1, 0.1, "#0d0d0f", [0, 0.14, L * 0.34], [Math.PI / 2, 0, 0], 12)
+      .cyl(0.06, 0.09, 0.09, "#0d0d0f", [0, 0.14, -L * 0.09], [Math.PI / 2, 0, 0], 12).box(0.02, 0.28, 0.02, M, [0.07, -0.12, L * 0.78], [0, 0, 0.4]).box(0.02, 0.28, 0.02, M, [-0.07, -0.12, L * 0.78], [0, 0, -0.4]);
+    if (id === "aug") k.cyl(0.24, 0.06, 0.06, "#0d0d0f", [0, 0.11, L * 0.12], [Math.PI / 2, 0, 0], 10).box(0.06, 0.09, 0.08, G, [0, -0.06, L * 0.32]);
+    if (id === "m16") k.box(0.03, 0.07, 0.22, M, [0, 0.11, L * 0.08]).box(0.02, 0.09, 0.02, M, [0, 0.11, L * 0.62]);
+    const mz = id === "aug" ? -L * 0.12 : L * 0.1; // bullpup — daraq tutacağın arxasında
+    mag.box(0.04, id === "sniper" ? 0.1 : 0.2, 0.07, "#3a3c40", [0, -0.13, mz], [0.2, 0, 0]);
   }
-  return k.build("w_" + id, vcMat(scene, "vcGun", 0.35));
+  const g = k.build("w_" + id, vcMat(scene, "vcGun", 0.5));
+  if (mag["parts"].length) { const m = mag.build("mag", vcMat(scene, "vcGun", 0.5)); m.parent = g; m.isPickable = false; }
+  return g;
 }
 
 export function cannonModel(scene: Scene): Mesh {
