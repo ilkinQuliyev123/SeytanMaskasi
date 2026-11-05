@@ -1,6 +1,6 @@
 // Dünya: 2.6 km relyef, 4 dağ, yollar, sıx meşə, mərkəzdə yapon saray kompleksi (dojo zalı, gölməçə, fənərlər).
 import { Color3, Matrix, Mesh, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector2, Vector3, VertexBuffer } from "@babylonjs/core";
-import { Grid, HALF, HAMLETS, heightAt, hillsAt, rng, roadCoords, roadPoint, SITES, type Site } from "./logic";
+import { Grid, HALF, HAMLETS, heightAt, hillsAt, NORTH, northAt, rng, roadCoords, roadPoint, SITES, townLayout, type Site } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
 import { environment, pbr, terrainMaterial } from "./materials";
 
@@ -77,6 +77,7 @@ export function buildWorld(scene: Scene, quality: Quality) {
 
   buildPalace(scene, grid, anchors);
   buildHamlets(scene, grid, anchors);
+  buildTown(scene, grid, anchors);
   buildForest(scene, quality);
   return { ground, grid, anchors };
 }
@@ -96,6 +97,7 @@ function buildForest(scene: Scene, quality: Quality) {
     if (Math.abs(x) < 50 && z > -44 && z < 46) return false;
     if (Math.abs(x) < 9 && z > 40 && z < 70) return false;
     if (HAMLETS.some((v) => Math.hypot(x - v.x, z - v.z) < v.r + 22)) return false;
+    { const { s, lat } = roadCoords(SITES[0], x, z); if (s > NORTH.hay[0] - 4 && s < NORTH.town[1] + 10 && Math.abs(lat) < NORTH.halfW + 25) return false; } // samanlıq + məhəllə
     for (const st of SITES) {
       if (Math.hypot(x - st.x, z - st.z) < st.R + 62) return false;
       const { s, lat, L } = roadCoords(st, x, z);
@@ -114,8 +116,45 @@ function buildForest(scene: Scene, quality: Quality) {
     }
   };
   place(2600 * k, 1500, 180);
+  for (let i = 0, n = 0; i < 9000 && n < 1500 * k; i++) { // keçiddən sonra 200 m SIX meşə (yolun iki tərəfi)
+    const s = NORTH.forest[0] + r() * (NORTH.forest[1] - NORTH.forest[0]), lat = (r() < 0.5 ? -1 : 1) * (8 + r() * 160), p = northAt(s, lat);
+    if (!free(p.x, p.z)) continue;
+    const sc = 0.9 + r() * 0.8; lists[r() < 0.75 ? 0 : 1].push(M(p.x, heightAt(p.x, p.z) - 0.2, p.z, sc, r() * 6, sc * (1 + r() * 0.5))); n++;
+  }
   place(1300 * k, HALF * 2 - 120, 0);
   [pine, broad, maple].forEach((ms, i) => ms.forEach((m) => scatter(m, lists[i])));
+}
+
+// --- samanlıq (meşənin bitdiyi yer) + 500 m labirint Osmanlı məhəlləsi ---
+function buildTown(scene: Scene, grid: Grid, anchors: Vector3[]) {
+  const hay = new Kit(scene), r = rng(9);
+  for (let i = 0; i < 70; i++) { // saman tayaları (~2 m) və bağlamalar
+    const s = NORTH.hay[0] + 3 + r() * (NORTH.hay[1] - NORTH.hay[0] - 6), lat = (r() - 0.5) * NORTH.halfW * 2.4;
+    if (Math.abs(lat) < 5) continue;
+    const p = northAt(s, lat), y = heightAt(p.x, p.z);
+    if (r() < 0.5) hay.cyl(2, 0.5, 2.6, "#c9a654", [p.x, y + 1, p.z], undefined, 9).cyl(0.5, 0, 0.6, "#a8873e", [p.x, y + 2.2, p.z], undefined, 7);
+    else hay.cyl(1.6, 1.6, 1.6, "#d4b260", [p.x, y + 0.8, p.z], [0, r() * 3, Math.PI / 2], 10);
+    grid.add({ x: p.x, z: p.z, r: 1.2 });
+  }
+  hay.build("hay", vcMat(scene, "vcWorld", 0.05)).isPickable = false;
+
+  const T = townLayout(), k = new Kit(scene), roofs = new Kit(scene), glow = new Kit(scene);
+  const tm: Record<string, [string, string]> = { "#a8977c": ["sandstone", "#d8ccb4"], "#e2d6bf": ["plaster", "#ffffff"], "#4a3020": ["cedar", "#6a4a34"], "#8e4a2e": ["roof", "#ffffff"] };
+  k.texMap = tm; roofs.texMap = tm;
+  let i = 0;
+  for (const h of T.houses) {
+    const p = northAt(h.s, h.lat), y = heightAt(p.x, p.z) - 0.4, tall = (i++ * 7) % 3 !== 0, w = T.u - 0.4, d = h.len - 0.6;
+    k.box(w, 3.4, d, "#a8977c", [p.x, y + 1.7, p.z]);
+    if (tall) k.box(w + 0.7, 2.6, d + 0.5, "#e2d6bf", [p.x, y + 4.7, p.z]).box(w + 0.75, 0.15, d + 0.55, "#4a3020", [p.x, y + 3.45, p.z]);
+    roofs.roof(w + 1.3, d + 1.1, 1.6, "#8e4a2e", [p.x, y + (tall ? 6 : 3.4) + 0.8, p.z], 0, 0.3);
+    if (i % 4 === 0) glow.box(0.1, 0.8, 1, "#ffffff", [p.x + (h.lat < 0 ? 1 : -1) * (w / 2 + (tall ? 0.4 : 0.05)), y + (tall ? 4.6 : 1.8), p.z]);
+    for (let t = -d / 2 + 2.5; t <= d / 2 - 2.4; t += 4.6) grid.add({ x: p.x, z: p.z + t, r: 2.7 });
+    if (d < 5) grid.add({ x: p.x, z: p.z, r: 2.7 });
+  }
+  for (let s = NORTH.town[0] + 20; s < NORTH.town[1]; s += 45) { const p = northAt(s, 4); anchors.push(new Vector3(p.x, heightAt(p.x, p.z) + 3, p.z)); glow.sph(0.6, "#ffffff", [p.x, heightAt(p.x, p.z) + 3, p.z], [1, 1.4, 1], 4); }
+  for (const m of k.buildAll("town", vcMat(scene, "vcWorld", 0.05))) m.metadata = { solid: true };
+  for (const m of roofs.buildAll("townRoof", vcMat(scene, "vcWorld", 0.05))) m.isPickable = false;
+  glow.build("townGlow", glowMat(scene, "#ffb35a")).isPickable = false;
 }
 
 // --- yapon kəndləri: taxta-suvaq evlər, qalın damlar, düyü tarlaları, fənərlər, quyu ---

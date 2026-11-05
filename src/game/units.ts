@@ -45,6 +45,8 @@ export class Unit implements Target {
   }
   /** maqnit: tüfəngi əlindən alınır — qılınca keçir */
   disarm() { if (!this.gun.w.melee) this.gun = new Gun(WEAPONS.scimitar); }
+  /** başqa yerə köçür (məs. məhəllə keşikçisi): orada gəzir */
+  relocate(x: number, z: number) { this.route = null; this.pos.set(x, 0, z); this.home.set(x, 0, z); this.wp.set(x, 0, z); this.place(); }
   setRoute(r: { x: number; z: number }[]) {
     this.route = r; this.ri = Math.floor(Math.random() * r.length); this.dir = Math.random() < 0.5 ? 1 : -1;
     const p = r[this.ri]; this.pos.set(p.x, 0, p.z); this.wp.set(p.x, 0, p.z); this.place();

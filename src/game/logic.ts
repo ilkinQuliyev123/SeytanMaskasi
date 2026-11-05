@@ -32,10 +32,45 @@ export function roadPoint(st: Site, s: number) {
 
 
 /** yapon kəndləri: saray ətrafında və şimal yolunun boyunca (yol boyu s, yan sürüşmə) */
-export const HAMLETS = [[110, 55], [300, -60], [520, 60], [760, -55]].map(([s, side], i) => {
-  const p = roadPoint(SITES[0], s);
-  return { id: i, x: p.x + side, z: p.z, r: 32 };
+/** yapon kəndləri: saray yanında və digər yolların boyunca */
+export const HAMLETS = [[0, 110, 55], [1, 230, -50], [2, 240, 55], [3, 250, -55]].map(([si, s, side], i) => {
+  const st = SITES[si], p = roadPoint(st, s), L = Math.hypot(st.x, st.z);
+  return { id: i, x: p.x + (st.z / L) * side, z: p.z - (st.x / L) * side, r: 32 };
 });
+
+/** şimal yolu (Osmanlı): keçiddən sonra 200 m sıx meşə → samanlıq → 500 m labirint məhəllə → qəsr */
+export const NORTH = { forest: [170, 370], hay: [370, 392], town: [392, 892], halfW: 62 } as const;
+export const northAt = (s: number, lat: number) => { const p = roadPoint(SITES[0], s); return { x: p.x + lat, z: p.z }; };
+
+/** labirint məhəllə: 5 m-lik hüceyrələrdə təsadüfi labirint (DFS) — divar hüceyrələri evdir, keçidlər küçədir.
+ *  Ortada əsas küçə (yol) düz gedir, labirintdə 12% əlavə keçid açılır ki, dalan az olsun. */
+export interface Town { u: number; cols: number; rows: number; houses: { s: number; lat: number; len: number }[]; alleys: { x: number; z: number }[] }
+export function townLayout(seed = 3): Town {
+  const u = 5, cols = Math.floor((NORTH.halfW * 2) / u) | 1, rows = Math.floor((NORTH.town[1] - NORTH.town[0]) / u) | 1, rnd = rng(seed);
+  const wall = Array.from({ length: rows }, () => new Array<boolean>(cols).fill(true));
+  const st: [number, number][] = [[1, 1]]; wall[1][1] = false;
+  while (st.length) { // DFS labirint
+    const [r, c] = st[st.length - 1];
+    const nb = ([[2, 0], [-2, 0], [0, 2], [0, -2]] as const).map(([dr, dc]) => [r + dr, c + dc, dr, dc]).filter(([nr, nc]) => nr > 0 && nc > 0 && nr < rows - 1 && nc < cols - 1 && wall[nr][nc]);
+    if (!nb.length) { st.pop(); continue; }
+    const [nr, nc, dr, dc] = nb[Math.floor(rnd() * nb.length)];
+    wall[r + dr / 2][c + dc / 2] = false; wall[nr][nc] = false; st.push([nr, nc]);
+  }
+  const mid = (cols - 1) / 2;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    if (Math.abs(c - mid) <= 1 || r === 0 || r === rows - 1) wall[r][c] = false; // əsas küçə + giriş/çıxış
+    else if (wall[r][c] && rnd() < 0.12) wall[r][c] = false; // əlavə keçidlər
+  }
+  const houses: Town["houses"] = [], alleys: Town["alleys"] = [];
+  const S = (r: number) => NORTH.town[0] + (r + 0.5) * u, L = (c: number) => (c - mid) * u;
+  for (let c = 0; c < cols; c++) for (let r = 0; r < rows; ) { // ardıcıl divar hüceyrələri bir uzun evə birləşir
+    if (!wall[r][c]) { if (c % 2 && r % 3 === 1 && Math.abs(c - mid) > 1) alleys.push(northAt(S(r), L(c))); r++; continue; }
+    let n = 1; while (r + n < rows && wall[r + n][c] && n < 4) n++;
+    houses.push({ s: S(r) + ((n - 1) * u) / 2, lat: L(c), len: n * u });
+    r += n;
+  }
+  return { u, cols, rows, houses, alleys };
+}
 
 export function heightAt(x: number, z: number): number {
   let h = hillsAt(x, z);

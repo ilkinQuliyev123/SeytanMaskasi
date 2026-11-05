@@ -2,7 +2,7 @@
 import { Color3, DefaultRenderingPipeline, Engine, GlowLayer, ImageProcessingConfiguration, LoadAssetContainerAsync, MeshBuilder, PointLight, Ray, Scene, SSAO2RenderingPipeline, StandardMaterial, Vector3, type LinesMesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { FORTS, UNITS, type ArmySetup, type Fort, type GameMap } from "./data";
-import { fortLayout, HAMLETS, heightAt, roadPoint, SITES, type FortLayout } from "./logic";
+import { fortLayout, HAMLETS, heightAt, roadPoint, SITES, townLayout, type FortLayout } from "./logic";
 import { Player } from "./player";
 import { Sky } from "./sky";
 import { spawn, Unit, type Post, type Target } from "./units";
@@ -80,12 +80,20 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
     const route = Array.from({ length: 10 }, (_, j) => ({ x: v.x + Math.sin(j * 0.63) * (8 + (j % 3) * 5), z: v.z + Math.cos(j * 0.63) * (8 + (j % 3) * 5) }));
     const c = new Unit(scene, UNITS.koylu, "", Vector3.Zero(), Vector3.Zero()); c.setRoute(route); civs.push(c);
   }
-  const roadRoute = Array.from({ length: 40 }, (_, j) => roadPoint(SITES[0], 60 + j * 22));
+  const roadRoute = Array.from({ length: 16 }, (_, j) => roadPoint(SITES[0], 60 + j * 20));
+  // məhəllə: dar küçələrdə kəndlilər gəzir, düşmənin bir hissəsi küçələrdə keşik çəkir
+  const town = townLayout(), alleys = town.alleys;
+  for (let i = 0; i < 40; i++) { const c = new Unit(scene, UNITS[i % 2 ? "mulki" : "mulki2"], "", Vector3.Zero(), Vector3.Zero()); c.setRoute(alleys.slice(Math.floor(Math.random() * (alleys.length - 12))).slice(0, 12)); civs.push(c); }
+  if (forts[0]) for (const u of forts[0].units.filter((u) => !u.post && !u.type.mounted).slice(0, Math.floor(forts[0].units.length * 0.3))) {
+    const a = alleys[Math.floor(Math.random() * alleys.length)]; // 30% piyada — məhəllədə
+    u.relocate(a.x, a.z);
+  }
   for (let i = 0; i < 12; i++) { const c = new Unit(scene, UNITS.koylu, "", Vector3.Zero(), Vector3.Zero()); c.setRoute(roadRoute); civs.push(c); }
   const enemies = forts.flatMap((f) => f.units), cannons = forts.flatMap((f) => f.cannons);
   const hittable: Target[] = [...enemies, ...cannons];
   LoadAssetContainerAsync("/assets/models/cannon_01/cannon_01.gltf", scene).then((c) => cannons.forEach((cn) => cn.useModel(c))).catch(() => {}); // real top modeli (yüklənənə qədər sadə model)
-  if (at) { const f = forts.find((x) => x.fort.id === at) ?? forts[0]; if (f) { const g = f.lay.gate, R = f.lay.site.R + 70; player.pos.set(f.lay.site.x + Math.sin(g) * R, 0, f.lay.site.z + Math.cos(g) * R); player.yaw = g + Math.PI; } }
+  if (at === "town") { const p = roadPoint(SITES[0], 360); player.pos.set(p.x, 0, p.z); player.yaw = 0; at = "x"; }
+  else if (at) { const f = forts.find((x) => x.fort.id === at) ?? forts[0]; if (f) { const g = f.lay.gate, R = f.lay.site.R + 70; player.pos.set(f.lay.site.x + Math.sin(g) * R, 0, f.lay.site.z + Math.cos(g) * R); player.yaw = g + Math.PI; } }
 
   // görünüş: kino tonu, bloom, FXAA, vinyet
   const pipe = new DefaultRenderingPipeline("fx", true, scene, [player.camera]);
