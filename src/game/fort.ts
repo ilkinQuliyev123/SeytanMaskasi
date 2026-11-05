@@ -35,11 +35,14 @@ export function buildFort(scene: Scene, f: FortLayout, grid: Grid, anchors: Vect
   }
 
   // darvaza: tağ + açıq qapı tayları + daş körpü-yol
-  const g = Object.assign(new Kit(scene), { texMap: TM }), gp = P(gate, st.R);
-  g.box(13, 3.2, 3.6, STONE2, [gp[0], B + H - 1.6, gp[2]], [0, gate, 0]).box(4.5, 2, 3.8, STONE, [gp[0], B + H + 1, gp[2]], [0, gate, 0]);
-  for (const s of [-1, 1]) {
-    const q = P(gate + (s * 4.6) / st.R, st.R - 2.5);
-    g.box(0.3, H - 3.4, 4.2, "#3e2a1a", [q[0], B + (H - 3.4) / 2, q[2]], [0, gate + s * 0.3, 0]);
+  const g = Object.assign(new Kit(scene), { texMap: TM });
+  for (let k = 0; k < 4; k++) { // 4 tərəfdə darvaza
+    const ga = gate + (k * Math.PI) / 2, gp = P(ga, st.R);
+    g.box(13, 3.2, 3.6, STONE2, [gp[0], B + H - 1.6, gp[2]], [0, ga, 0]).box(4.5, 2, 3.8, STONE, [gp[0], B + H + 1, gp[2]], [0, ga, 0]);
+    for (const s of [-1, 1]) {
+      const q = P(ga + (s * 4.6) / st.R, st.R - 2.5);
+      g.box(0.3, H - 3.4, 4.2, "#3e2a1a", [q[0], B + (H - 3.4) / 2, q[2]], [0, ga + s * 0.3, 0]);
+    }
   }
   // saray-qala: çoxmərtəbəli fasad, künc qüllələri, mərkəzdə qübbə
   const pk = Object.assign(new Kit(scene), { texMap: TM }), cx = st.x, cz = st.z;

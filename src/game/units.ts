@@ -3,6 +3,11 @@ import { Mesh, Scene, Vector3, type InstancedMesh } from "@babylonjs/core";
 import { UNITS, WEAPONS, type UnitType } from "./data";
 import { canSee, Gun, heightAt, hitChance, type Grid } from "./logic";
 import { unitModel } from "./kit";
+import type { AnimState, CharLib } from "./chars";
+
+/** animasiyalı personaj kitabxanası (yüklənibsə) */
+let chars: CharLib | null = null;
+export const setChars = (c: CharLib | null) => (chars = c);
 
 export interface Target { pos: Vector3; alive: boolean; hit(dmg: number): void; ally: boolean; stealth?: number } // stealth: görünmə əmsalı (1 — adi)
 export type Post = { y: number; face: number };
@@ -26,8 +31,11 @@ export class Unit implements Target {
   alert: Vector3 | null = null; fort = ""; route: { x: number; z: number }[] | null = null; private ri = 0; private dir = 1;
   stun = 0; acc = 0; dist = 0; private blk = false; // acc/dist — oyun dövrəsi üçün (uzaqdakılar seyrək yenilənir)
   private think = Math.random() * 0.25; private wp: Vector3; private bob = Math.random() * 6;
+  anim: AnimState | null = null; private shotT = 0; private moved = 0;
   constructor(scene: Scene, public type: UnitType, weaponId: string, public pos: Vector3, private home: Vector3, public post: Post | null = null) {
-    this.mesh = baseMesh(scene, type).createInstance(type.id);
+    let m: InstancedMesh | null = null;
+    if (chars?.has(type.id)) try { m = chars.instance(type.id, "idle"); this.anim = "idle"; } catch { /* sadə modelə keç */ }
+    this.mesh = m ?? baseMesh(scene, type).createInstance(type.id);
     this.mesh.metadata = { unit: this };
     if (type.civ) this.mesh.isPickable = false; // güllə mülkilərdən keçir
     this.hp = type.hp;
@@ -41,7 +49,19 @@ export class Unit implements Target {
   hit(dmg: number) {
     if (!this.alive) return;
     this.hp -= dmg;
-    if (this.hp <= 0) { this.mesh.rotation.x = -Math.PI / 2; this.mesh.position.y += 0.3; this.mesh.isPickable = false; }
+    if (this.hp <= 0) {
+      if (this.anim) this.setAnim("dead"); else { this.mesh.rotation.x = -Math.PI / 2; this.mesh.position.y += 0.3; }
+      this.mesh.isPickable = false;
+    }
+  }
+  /** animasiya halı dəyişəndə instance başqa şablona keçir */
+  setAnim(s: AnimState) {
+    if (!chars || !this.anim || this.anim === s) return;
+    const old = this.mesh;
+    try { this.mesh = chars.instance(this.type.id, s); } catch { return; }
+    this.mesh.metadata = old.metadata; this.mesh.isPickable = old.isPickable && s !== "dead"; this.mesh.isVisible = old.isVisible;
+    if (this.type.civ) this.mesh.isPickable = false;
+    this.anim = s; old.dispose(); this.place();
   }
   /** maqnit: tüfəngi əlindən alınır — qılınca keçir */
   disarm() { if (!this.gun.w.melee) this.gun = new Gun(WEAPONS.scimitar); }
@@ -55,11 +75,13 @@ export class Unit implements Target {
     this.pos.y = this.post ? this.post.y : heightAt(this.pos.x, this.pos.z);
     this.mesh.position.copyFrom(this.pos);
     this.mesh.rotation.y = this.facing;
+    if (this.anim && this.mesh.scaling.x > 0) this.mesh.scaling.x = -1;
   }
 
   update(dt: number, ctx: Ctx) {
     if (!this.alive) return;
-    if (this.stun > 0) { this.stun -= dt; return; } // donub / tora düşüb
+    if (this.stun > 0) { this.stun -= dt; this.setAnim("idle"); return; } // donub / tora düşüb
+    this.shotT -= dt; this.moved = 0;
     this.gun.update(dt);
     if (!this.type.civ && (this.think -= dt) <= 0) { // mülkilər döyüşmür // saniyədə 4 dəfə «düşünür» — prosessor qənaəti
       this.think = 0.25;
@@ -90,6 +112,7 @@ export class Unit implements Target {
       if (d > want || blocked) { goal = this.target.pos; speed = this.type.speed * 1.3; }
       this.face(this.target.pos);
       if (d <= w.range && !blocked && this.gun.fire()) {
+        this.shotT = 0.7;
         const hit = Math.random() < hitChance(w, d);
         if (hit) this.target.hit(w.dmg * (0.8 + Math.random() * 0.4));
         if (!w.melee) ctx.onShot(this.pos.add(new Vector3(0, 1.5, 0)), this.target.pos.add(new Vector3(0, 1.2, 0)), hit);
@@ -116,7 +139,8 @@ export class Unit implements Target {
     if (this.post) goal = null; // keşikçi yerindən tərpənmir
     if (goal) this.move(goal, speed * dt, ctx.grid, ctx.mates);
     this.place();
-    if (goal && !this.post) this.mesh.position.y += Math.abs(Math.sin((this.bob += dt * speed * 2.2))) * 0.08; // addım
+    if (this.anim) this.setAnim(this.shotT > 0 ? (w.melee ? "attack" : "shoot") : this.moved > 0.02 * dt * 60 ? (speed > this.type.speed ? "run" : "walk") : "idle");
+    else if (goal && !this.post) this.mesh.position.y += Math.abs(Math.sin((this.bob += dt * speed * 2.2))) * 0.08; // addım
   }
 
   private face(p: Vector3) { this.facing = Math.atan2(p.x - this.pos.x, p.z - this.pos.z); }
@@ -137,6 +161,7 @@ export class Unit implements Target {
     const n = Math.hypot(vx, vz) || 1;
     this.pos.x += (vx / n) * Math.min(step, d);
     this.pos.z += (vz / n) * Math.min(step, d);
+    this.moved = Math.min(step, d);
     for (const o of grid.near(this.pos.x, this.pos.z)) { // divarın içinə girməsin
       const ox = this.pos.x - o.x, oz = this.pos.z - o.z, od = Math.hypot(ox, oz), r = o.r + 0.5;
       if (od < r && od > 1e-3) { this.pos.x = o.x + (ox / od) * r; this.pos.z = o.z + (oz / od) * r; }

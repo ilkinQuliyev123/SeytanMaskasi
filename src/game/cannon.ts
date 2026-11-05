@@ -11,7 +11,7 @@ function mats(scene: Scene) {
 }
 
 export class Cannon implements Target {
-  ally = false; hp = 150; private cool = 3 + Math.random() * 3;
+  ally = false; hp = 150; private cool = 10 + Math.random() * 6;
   private fl: { a: Vector3; b: Vector3; t: number; dur: number } | null = null; private boomT = 0;
   private shell: Mesh; private ring: Mesh; private boom: Mesh;
   inst: AbstractMesh;
@@ -50,13 +50,13 @@ export class Cannon implements Target {
       }
     }
     if (!this.alive || !alarmed || this.fl || (this.cool -= dt) > 0) return null;
-    let best: Target | null = null, bd = 170;
+    let best: Target | null = null, bd = 130;
     for (const t of foes) { const d = Vector3.Distance(t.pos, this.pos); if (t.alive && d > 20 && d < bd) { bd = d; best = t; } }
     if (!best) return null;
     const b = best.pos.clone(); b.y = groundY(b.x, b.z);
     this.fl = { a: this.pos.add(new Vector3(0, 1.2, 0)), b, t: 0, dur: 1.6 + bd / 110 };
     this.ring.position.set(b.x, b.y + 0.3, b.z); this.ring.setEnabled(true); this.shell.setEnabled(true);
-    this.cool = 6 + Math.random() * 3;
+    this.cool = 15 + Math.random() * 7;
     return best;
   }
 }

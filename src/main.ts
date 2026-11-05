@@ -24,4 +24,5 @@ if (new URLSearchParams(location.search).has("auto")) {
   addEventListener("unhandledrejection", (e) => (document.title = "ERR " + String(e.reason)));
   runGame(engine, canvas, MAPS[0], setup, quality, home, new URLSearchParams(location.search).get("at") ?? undefined);
   setTimeout(() => { if (!document.title.startsWith("ERR")) document.title = `OK fps=${engine.getFps().toFixed(0)} ui=${document.getElementById("ui")!.innerText.slice(0, 120).replace(/\s+/g, " ")}`; }, 8000);
-} else home();
+} else if (new URLSearchParams(location.search).has("setup")) setupMenu(MAPS[0], setup, () => {}, home); // UI yoxlaması üçün
+else home();

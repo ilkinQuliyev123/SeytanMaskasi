@@ -1,5 +1,5 @@
 // Dünya: 2.6 km relyef, 4 dağ, yollar, sıx meşə, mərkəzdə yapon saray kompleksi (dojo zalı, gölməçə, fənərlər).
-import { Color3, Matrix, Mesh, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector2, Vector3, VertexBuffer } from "@babylonjs/core";
+import { Color3, DynamicTexture, Matrix, Mesh, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector2, Vector3, VertexBuffer } from "@babylonjs/core";
 import { Grid, HALF, HAMLETS, heightAt, hillsAt, NORTH, northAt, rng, roadCoords, roadPoint, SITES, townLayout, type Site } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
 import { environment, pbr, terrainMaterial } from "./materials";
@@ -125,18 +125,36 @@ function buildForest(scene: Scene, quality: Quality) {
   [pine, broad, maple].forEach((ms, i) => ms.forEach((m) => scatter(m, lists[i])));
 }
 
+/** 2 m hündür sıx ot zolağı: çarpaz kartlar + prosedur ot toxuması (alfa), külək ilə yellənir */
+export const inTallGrass = (x: number, z: number) => { const { s, lat } = roadCoords(SITES[0], x, z); return s > NORTH.hay[0] && s < NORTH.hay[1] && Math.abs(lat) > 4 && Math.abs(lat) < NORTH.halfW * 1.6; };
+function tallGrass(scene: Scene) {
+  const t = new DynamicTexture("grassTex", { width: 256, height: 256 }, scene, true), c = t.getContext() as CanvasRenderingContext2D, r = rng(4);
+  c.clearRect(0, 0, 256, 256);
+  for (let i = 0; i < 90; i++) { // ot yarpaqları
+    const x = r() * 256, h = 150 + r() * 106, bend = (r() - 0.5) * 40, g = 70 + r() * 70;
+    c.strokeStyle = `rgb(${g * 0.5 | 0},${g * 0.72 | 0},${g * 0.3 | 0})`; c.lineWidth = 2 + r() * 3;
+    c.beginPath(); c.moveTo(x, 256); c.quadraticCurveTo(x + bend * 0.3, 256 - h * 0.5, x + bend, 256 - h); c.stroke();
+  }
+  t.hasAlpha = true; t.update();
+  const m = new StandardMaterial("tallGrass", scene);
+  m.diffuseTexture = t; m.useAlphaFromDiffuseTexture = true; m.backFaceCulling = false; m.specularColor = Color3.Black();
+  m.diffuseTexture.hasAlpha = true; m.transparencyMode = 1; // alpha test — ucuz
+  const card = (ry: number) => { const p = MeshBuilder.CreatePlane("gc", { width: 2.2, height: 2.1 }, scene); p.position.y = 1.05; p.rotation.y = ry; return p; };
+  const clump = Mesh.MergeMeshes([card(0), card(Math.PI / 3), card((2 * Math.PI) / 3)], true)!;
+  clump.material = m; clump.isPickable = false;
+  const ms: Matrix[] = [], rr = rng(21);
+  for (let i = 0; i < 5200; i++) {
+    const s = NORTH.hay[0] + rr() * (NORTH.hay[1] - NORTH.hay[0]), lat = (rr() - 0.5) * NORTH.halfW * 3.2;
+    if (Math.abs(lat) < 4) continue; // yol açıq
+    const p = northAt(s, lat), sc = 0.8 + rr() * 0.45;
+    ms.push(M(p.x, heightAt(p.x, p.z) - 0.1, p.z, sc, rr() * 6, sc * (0.85 + rr() * 0.3)));
+  }
+  scatter(clump, ms);
+}
+
 // --- samanlıq (meşənin bitdiyi yer) + 500 m labirint Osmanlı məhəlləsi ---
 function buildTown(scene: Scene, grid: Grid, anchors: Vector3[]) {
-  const hay = new Kit(scene), r = rng(9);
-  for (let i = 0; i < 70; i++) { // saman tayaları (~2 m) və bağlamalar
-    const s = NORTH.hay[0] + 3 + r() * (NORTH.hay[1] - NORTH.hay[0] - 6), lat = (r() - 0.5) * NORTH.halfW * 2.4;
-    if (Math.abs(lat) < 5) continue;
-    const p = northAt(s, lat), y = heightAt(p.x, p.z);
-    if (r() < 0.5) hay.cyl(2, 0.5, 2.6, "#c9a654", [p.x, y + 1, p.z], undefined, 9).cyl(0.5, 0, 0.6, "#a8873e", [p.x, y + 2.2, p.z], undefined, 7);
-    else hay.cyl(1.6, 1.6, 1.6, "#d4b260", [p.x, y + 0.8, p.z], [0, r() * 3, Math.PI / 2], 10);
-    grid.add({ x: p.x, z: p.z, r: 1.2 });
-  }
-  hay.build("hay", vcMat(scene, "vcWorld", 0.05)).isPickable = false;
+  tallGrass(scene);
 
   const T = townLayout(), k = new Kit(scene), roofs = new Kit(scene), glow = new Kit(scene);
   const tm: Record<string, [string, string]> = { "#a8977c": ["sandstone", "#d8ccb4"], "#e2d6bf": ["plaster", "#ffffff"], "#4a3020": ["cedar", "#6a4a34"], "#8e4a2e": ["roof", "#ffffff"] };

@@ -10,6 +10,9 @@ import { buildWorld, DOJO, type Quality } from "./world";
 import { buildFort } from "./fort";
 import { Cannon } from "./cannon";
 import { cannonModel } from "./kit";
+import { CharLib } from "./chars";
+import { setChars } from "./units";
+import { Sfx } from "./audio";
 import { T } from "../i18n/az";
 import { createHud, endScreen, pauseMenu } from "../ui/ui";
 import { createWheel } from "../ui/wheel";
@@ -59,12 +62,18 @@ function garrison(scene: Scene, f: FortLayout, fort: Fort, n: number) {
   return { units, cannons, civs };
 }
 
-export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap, setup: ArmySetup, quality: Quality, onExit: () => void, at?: string) {
+export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap, setup: ArmySetup, quality: Quality, onExit: () => void, at?: string) {
   lockCanvas = canvas;
+  const loading = document.createElement("div"); loading.className = "screen loading"; loading.textContent = "Yüklənir…";
+  document.getElementById("ui")?.replaceChildren(loading);
   engine.setHardwareScalingLevel(quality === "low" ? 1.6 : 1.1); // aşağı ölçüdə çək — zəif video kart üçün
   const scene = new Scene(engine);
   scene.skipPointerMovePicking = true;
   const player = new Player(scene, setup.weapons, canvas);
+  // animasiyalı personajlar: yüklənmirsə sadə modellərlə davam edir
+  const lib = await CharLib.load(scene).catch((e) => { console.warn("personajlar yüklənmədi", e); return null; });
+  setChars(lib);
+  if (lib) player.useChar(lib);
   const sky = new Sky(scene, player.camera, quality, map.startHour ?? 9);
   const { grid, anchors } = buildWorld(scene, quality);
 
@@ -127,7 +136,10 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
   const tracerMat = new StandardMaterial("tr", scene);
   tracerMat.emissiveColor = new Color3(1, 0.8, 0.4); tracerMat.disableLighting = true;
   const tracers: { l: LinesMesh; t: number }[] = [];
+  let sfxRef: Sfx | null = null;
   const shot = (a: Vector3, b: Vector3) => {
+    const d = Vector3.Distance(a, player.pos);
+    if (sfxRef && d > 3 && d < 160 && Math.random() < 0.5) sfxRef.shot("musket", d);
     let tr = tracers.find((x) => x.t <= 0);
     if (!tr) {
       if (tracers.length > 40) return;
@@ -178,6 +190,8 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
   const clickLock = () => { if (!paused && !ended) lockSafe(); };
   canvas.addEventListener("click", clickLock);
   let hudRef = createHud();
+  const sfx = (sfxRef = new Sfx()); let ambT = 0, stepT = 0, lastAmmo = -1, lastCur = -1, lastForm = "";
+  const unlock = () => sfx.unlock(); canvas.addEventListener("pointerdown", unlock);
   const hudRebuild = () => { hudRef.destroy(); hudRef = createHud(); };
 
   scene.onBeforeRenderObservable.add(() => {
@@ -187,6 +201,14 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
     sky.update(dt, player.pressed("KeyT"));
     player.update(dt, grid, hittable, shot);
     const pp = player.pos;
+    // səslər: fon, addımlar, atəş, doldurma, çevrilmə
+    if ((ambT -= dt) <= 0) { ambT = 1; sfx.ambience(sky.isNight, sky.weather === "yağış" ? 0.8 : sky.weather === "duman" ? 0.2 : 0.45); }
+    const g0 = player.gun, moving = player.pressed("KeyW") || player.pressed("KeyA") || player.pressed("KeyS") || player.pressed("KeyD");
+    if (moving && player.jumpH <= 0 && (stepT -= dt) <= 0) { const run = player.pressed("ShiftLeft"); stepT = run ? 0.3 : 0.45; sfx.step(run); }
+    if (player.cur === lastCur && g0.ammo < lastAmmo) sfx.shot(g0.w.id as "m16");
+    if (player.cur === lastCur && g0.reloading > 0 && g0.ammo === 0 && lastAmmo !== 0) sfx.reload(g0.w.id);
+    lastAmmo = g0.ammo; lastCur = player.cur;
+    const fid = player.watch.active?.id ?? ""; if (fid !== lastForm) { if (fid) sfx.transform(); lastForm = fid; }
     if ((slowT -= dt) <= 0) { // yarım saniyədə bir: məsafələr, görünmə, işıqlar, həyəcan
       slowT = 0.5;
       for (const e of enemies) { e.dist = Math.hypot(e.pos.x - pp.x, e.pos.z - pp.z); e.mesh.isVisible = e.dist < 420; }
@@ -216,7 +238,7 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
       c.mesh.isVisible = d < 300 && !(forts.some((f) => f.alarmed) && d < 45);
       if (d < 220) c.update(dt * 3, { foes: [], night, fog, leader: pp, order, grid, mates: [], onShot: shot, slot: 0 });
     }
-    for (const f of forts) for (const c of f.cannons) if (c.update(dt, foes, f.alarmed, heightAt) === player) say(T.cannonWarn, 2);
+    for (const f of forts) for (const c of f.cannons) { const t = c.update(dt, foes, f.alarmed, heightAt); if (t) sfx.cannon(Vector3.Distance(c.pos, pp)); if (t === player) say(T.cannonWarn, 2); }
     for (const t of tracers) if ((t.t -= dt) <= 0) t.l.isVisible = false;
     msgT -= dt;
     for (const f of forts) if (!f.cleared && f.units.every((u) => !u.alive)) {
@@ -244,6 +266,7 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
   }
   function quit() {
     removeEventListener("keydown", onKey);
+    canvas.removeEventListener("pointerdown", unlock); sfx.dispose();
     removeEventListener("keydown", onWheelKey); removeEventListener("keyup", onWheelKey); removeEventListener("mousemove", onWheelMove); wheel.destroy();
     document.removeEventListener("pointerlockchange", lockChange);
     canvas.removeEventListener("click", clickLock);

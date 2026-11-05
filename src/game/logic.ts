@@ -39,7 +39,7 @@ export const HAMLETS = [[0, 110, 55], [1, 230, -50], [2, 240, 55], [3, 250, -55]
 });
 
 /** şimal yolu (Osmanlı): keçiddən sonra 200 m sıx meşə → samanlıq → 500 m labirint məhəllə → qəsr */
-export const NORTH = { forest: [170, 370], hay: [370, 392], town: [392, 892], halfW: 62 } as const;
+export const NORTH = { forest: [170, 370], hay: [370, 400], town: [400, 880], halfW: 62 } as const;
 export const northAt = (s: number, lat: number) => { const p = roadPoint(SITES[0], s); return { x: p.x + lat, z: p.z }; };
 
 /** labirint məhəllə: 5 m-lik hüceyrələrdə təsadüfi labirint (DFS) — divar hüceyrələri evdir, keçidlər küçədir.
@@ -81,7 +81,7 @@ export function heightAt(x: number, z: number): number {
     const { s, lat, L } = roadCoords(st, x, z);
     if (s > 0 && s < L && Math.abs(lat) < 22) h = lerp(hillsAt(x, z) * valley(x, z), h, smooth(6, 22, Math.abs(lat)));
     const d = Math.hypot(x - st.x, z - st.z);
-    if (d < st.R + 70) h = lerp(siteBase(st), h, smooth(st.R + 25, st.R + 70, d));
+    if (d < st.R + 110) h = lerp(siteBase(st), h, smooth(st.R + 75, st.R + 110, d));
   }
   for (const v of HAMLETS) { const d = Math.hypot(x - v.x, z - v.z); if (d < v.r + 30) h = lerp(hillsAt(v.x, v.z), h, smooth(v.r, v.r + 30, d)); }
   return h;
@@ -127,14 +127,16 @@ export function fortLayout(st: Site, seed = 1): FortLayout {
   const rad = (a: number) => st.shape === "square" ? (st.R * 0.85) / Math.max(Math.abs(Math.sin(a)), Math.abs(Math.cos(a))) : st.R;
   const P = (a: number, r: number) => ({ x: st.x + Math.sin(a) * r, z: st.z + Math.cos(a) * r });
   const wall: FortLayout["wall"] = [], towers: FortLayout["towers"] = [], posts: FortLayout["posts"] = [];
-  for (let i = 1; i < N; i++) { // i=0 darvaza boşluğudur
+  const gates = [0, 12, 24, 36]; // 4 tərəfdə darvaza (əsas darvaza saraya baxır)
+  for (let i = 0; i < N; i++) {
+    if (gates.includes(i)) continue; // darvaza boşluğu
     const a0 = gate + (i - 0.5) * step, a1 = gate + (i + 0.5) * step, p0 = P(a0, rad(a0)), p1 = P(a1, rad(a1));
     wall.push({ x: (p0.x + p1.x) / 2, z: (p0.z + p1.z) / 2, a: Math.atan2(p1.x - p0.x, p1.z - p0.z), len: Math.hypot(p1.x - p0.x, p1.z - p0.z) });
-    if (i === 1 || i % 8 === 0) towers.push({ ...p0, a: a0 });
-    if (i === N - 1) towers.push({ ...p1, a: a1 });
+    if (gates.includes(i - 1) || i % 6 === 3) towers.push({ ...p0, a: a0 }); // darvaza qüllələri + aralıq qüllələr
+    if (gates.includes(i + 1)) towers.push({ ...p1, a: a1 });
     if (i % 4 === 2) { const m = gate + i * step, p = P(m, rad(m)); posts.push({ ...p, y: base + wallH, face: m, kind: "wall" }); }
   }
-  const ring = st.R * 0.58, streets = Array.from({ length: 6 }, (_, k) => gate + (k * Math.PI) / 3), palace = { x: st.x, z: st.z, r: 15 };
+  const ring = st.R * 0.58, streets = Array.from({ length: 8 }, (_, k) => gate + (k * Math.PI) / 4), palace = { x: st.x, z: st.z, r: 15 };
   const houses: FortLayout["houses"] = [];
   for (let r = 30; r < st.R; r += 9) {
     const n = Math.floor((Math.PI * 2 * r) / 11), a0 = rnd() * 0.3; // bərabər addım — halqanın başı-sonu üst-üstə düşmür
@@ -148,15 +150,15 @@ export function fortLayout(st: Site, seed = 1): FortLayout {
   }
   // çöl kənd: divarın ətrafında 3 halqa ev, aralarında 2 cığır; darvaza yolu boş qalır
   const village: FortLayout["houses"] = [], roam: FortLayout["roam"] = [];
-  for (const dr of [11, 29, 47]) {
-    const r = st.R + dr, n = Math.floor((Math.PI * 2 * r) / 12), a0 = rnd();
+  for (const dr of [11, 22, 40, 51, 69]) { // sıx kənd: 5 halqa, aralarında cığırlar (R+31, R+60)
+    const r = st.R + dr, n = Math.floor((Math.PI * 2 * r) / 9.5), a0 = rnd();
     for (let j = 0; j < n; j++) {
-      const a = a0 + (j / n) * Math.PI * 2, w = 5 + rnd() * 3, d = 5 + rnd() * 2;
-      if (rnd() < 0.3 || angDiff(a, gate) * r < 16) continue;
+      const a = a0 + (j / n) * Math.PI * 2, w = 5 + rnd() * 2.5, d = 5 + rnd() * 1.5;
+      if (rnd() < 0.08 || [0, 1, 2, 3].some((g) => angDiff(a, gate + (g * Math.PI) / 2) * r < 9)) continue; // 4 darvaza yolu boş
       village.push({ ...P(a, rad(a) - st.R + r), w, d, rot: a });
     }
   }
-  for (const dr of [20, 38]) for (let k = 0; k < 20; k++) { const a = gate + 0.25 + (k / 20) * (Math.PI * 2 - 0.5); roam.push(P(a, rad(a) - st.R + st.R + dr)); }
+  for (const dr of [31, 60]) for (let k = 0; k < 20; k++) { const a = gate + 0.25 + (k / 20) * (Math.PI * 2 - 0.5); roam.push(P(a, rad(a) - st.R + st.R + dr)); }
   const gi = P(gate, st.R - 10);
   for (const l of [-5, 0, 5]) posts.push({ x: gi.x + Math.cos(gate) * l, z: gi.z - Math.sin(gate) * l, y: base, face: gate, kind: "gate" });
   for (let k = 0; k < 4; k++) { const a = gate + (k * Math.PI) / 2; posts.push({ ...P(a, 21), y: base, face: a, kind: "palace" }); }
