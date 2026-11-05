@@ -1,6 +1,6 @@
 // Dünya: 2.6 km relyef, 4 dağ, yollar, sıx meşə, mərkəzdə yapon saray kompleksi (dojo zalı, gölməçə, fənərlər).
 import { Color3, DynamicTexture, Matrix, Mesh, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector2, Vector3, VertexBuffer } from "@babylonjs/core";
-import { Grid, HALF, HAMLETS, heightAt, hillsAt, NORTH, northAt, rng, roadCoords, roadPoint, SITES, townLayout, type Site } from "./logic";
+import { rawHeight, setGroundSampler, Grid, HALF, HAMLETS, heightAt, hillsAt, NORTH, northAt, rng, roadCoords, roadPoint, SITES, townLayout, type Site } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
 import { environment, pbr, terrainMaterial } from "./materials";
 
@@ -52,7 +52,7 @@ export function buildWorld(scene: Scene, quality: Quality) {
   const pos = ground.getVerticesData(VertexBuffer.PositionKind)!, col: number[] = [];
   const r0 = rng(3);
   for (let i = 0; i < pos.length; i += 3) {
-    const x = pos[i], z = pos[i + 2], h = heightAt(x, z);
+    const x = pos[i], z = pos[i + 2], h = rawHeight(x, z);
     pos[i + 1] = h;
     // toxuma çəkiləri: r — meşə torpağı, g — ot, b — qaya; qalanı (1 − cəm) — torpaq
     const slope = Math.abs(heightAt(x + 4, z) - h) + Math.abs(heightAt(x, z + 4) - h);
@@ -65,6 +65,8 @@ export function buildWorld(scene: Scene, quality: Quality) {
   ground.updateVerticesData(VertexBuffer.PositionKind, pos);
   ground.setVerticesData(VertexBuffer.ColorKind, col);
   ground.createNormals(false);
+  ground.updateCoordinateHeights();
+  setGroundSampler((x, z) => ground.getHeightAtCoordinates(x, z)); // obyektlər çəkilən səthə oturur
   environment(scene);
   ground.material = terrainMaterial(scene);
   ground.isPickable = false;

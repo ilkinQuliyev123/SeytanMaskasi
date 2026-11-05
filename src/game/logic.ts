@@ -72,7 +72,13 @@ export function townLayout(seed = 3): Town {
   return { u, cols, rows, houses, alleys };
 }
 
+/** çəkilən relyef meşindən dəqiq hündürlük (oyunda qurulur; testlərdə yoxdur) */
+let sampler: ((x: number, z: number) => number) | null = null;
+export const setGroundSampler = (f: typeof sampler) => (sampler = f);
 export function heightAt(x: number, z: number): number {
+  return sampler ? sampler(x, z) : rawHeight(x, z);
+}
+export function rawHeight(x: number, z: number): number {
   let h = hillsAt(x, z);
   for (const [mx, mz] of MOUNTAINS) h += 90 * Math.exp(-((x - mx) ** 2 + (z - mz) ** 2) / 7200);
   const e = Math.max(0, Math.max(Math.abs(x), Math.abs(z)) - 1120); // kənarda sərhəd dağları

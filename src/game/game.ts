@@ -74,6 +74,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   // animasiyalı personajlar: yüklənmirsə sadə modellərlə davam edir
   const lib = await CharLib.load(scene).catch((e) => { console.warn("personajlar yüklənmədi", e); return null; });
   setChars(lib);
+  if (lib) try { lib.warm(["samurai", "ninja", "yeniceri", "ottoman", "okcu", "mulki", "mulki2", "koylu"]); } catch { setChars(null); }
   if (lib) player.useChar(lib);
   const sky = new Sky(scene, player.camera, quality, map.startHour ?? 9);
   const { grid, anchors } = buildWorld(scene, quality);
@@ -177,8 +178,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   const onKey = (e: KeyboardEvent) => {
     if (e.code === "KeyG" && !paused) { // əjdahaya min / düş
       if (player.riding) { player.riding = null; dragon.rider = false; player.pos.y = heightAt(player.pos.x, player.pos.z); say("Əjdahadan düşdün", 2); }
-      else if (Vector3.Distance(dragon.pos, player.pos) < 14) { player.riding = dragon; dragon.rider = true; say("Əjdaha: WASD uç · Space/Ctrl qalx/en · Shift sürət · Sol klik alov · G düş", 5); }
-      else say("Əjdahaya yaxınlaş (14 m) və G bas", 2);
+      else { dragon.summon = player.pos.clone(); say("Əjdaha gəlir…", 2); }
     }
     if (e.code === "KeyF" && !paused) {
       order = order === "follow" ? "attack" : "follow";
@@ -218,7 +218,9 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     const fid = player.watch.active?.id ?? ""; if (fid !== lastForm) { if (fid) sfx.transform(); lastForm = fid; }
     if ((slowT -= dt) <= 0) { // yarım saniyədə bir: məsafələr, görünmə, işıqlar, həyəcan
       slowT = 0.5;
-      for (const e of enemies) { e.dist = Math.hypot(e.pos.x - pp.x, e.pos.z - pp.z); e.mesh.isVisible = e.dist < 420; }
+      for (const e of enemies) { e.dist = Math.hypot(e.pos.x - pp.x, e.pos.z - pp.z); e.setLod(e.dist < 90, e.dist < 320); }
+      lib?.tick();
+      for (const a of allies) a.setLod(Math.hypot(a.pos.x - pp.x, a.pos.z - pp.z) < 90, true);
       anchors.sort((a, b) => Vector3.DistanceSquared(a, pp) - Vector3.DistanceSquared(b, pp));
       lamps.forEach((l, i) => anchors[i] && l.position.copyFrom(anchors[i]));
       for (const f of forts) f.alarmed = f.units.some((u) => u.alive && !!u.target);
@@ -229,7 +231,13 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     const night = sky.isNight, fog = sky.fog;
     if (player.watch.active?.id === "qalxan") for (const a of allies) if (a.alive && Vector3.Distance(a.pos, pp) < 10) a.hp = Math.min(a.type.hp, a.hp + 12 * dt); // qalxan dəstəni sağaldır
     allies.forEach((u, i) => u.update(dt, { foes: enemies, night, fog, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked }));
-    if (!player.riding) dragon.update(dt, pp, hittable);
+    if (!player.riding) {
+      dragon.update(dt, pp, hittable);
+      if (dragon.summon && Vector3.Distance(dragon.pos, dragon.summon) < 7) { // endi — min
+        dragon.summon = null; player.riding = dragon; dragon.rider = true;
+        say("Əjdaha: WASD uç · Space/Ctrl qalx/en · Shift sürət · Sol klik alov · G düş", 5);
+      }
+    }
     const foes: Target[] = [player, ...allies, dragon];
     for (const f of forts) for (const u of f.units) {
       if (!u.alive) continue;
@@ -243,7 +251,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     for (const c of civs) { // mülkilər yalnız yaxında hərəkət edir; döyüş yaxınlaşanda evlərə qaçır (gizlənir)
       if ((frame + (c.hp | 0)) % 3) continue;
       const d = Math.hypot(c.pos.x - pp.x, c.pos.z - pp.z);
-      c.mesh.isVisible = d < 300 && !(forts.some((f) => f.alarmed) && d < 45);
+      c.setLod(d < 70, d < 260 && !(forts.some((f) => f.alarmed) && d < 45));
       if (d < 220) c.update(dt * 3, { foes: [], night, fog, leader: pp, order, grid, mates: [], onShot: shot, slot: 0 });
     }
     for (const f of forts) for (const c of f.cannons) { const t = c.update(dt, foes, f.alarmed, heightAt); if (t) sfx.cannon(Vector3.Distance(c.pos, pp)); if (t === player) say(T.cannonWarn, 2); }

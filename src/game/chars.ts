@@ -51,13 +51,23 @@ export class CharLib {
   }
   private broken = false;
   has(type: string) { return !this.broken && type in LOOKS; }
+  /** görünən instance-ı olmayan şablonların animasiyasını dayandır (prosessor qənaəti) — 0.5 s-də bir çağır */
+  tick() {
+    for (const [, ts] of this.templates) for (const m of ts) {
+      const ag = m.metadata?.ag as AnimationGroup | undefined, used = m.instances.some((i) => i.isVisible);
+      m.setEnabled(used);
+      if (ag && !ag.isPlaying && used && !ag.name.includes("dead")) ag.play(true); else if (ag && ag.isPlaying && !used) ag.pause();
+    }
+  }
+  /** bütün şablonları əvvəlcədən hazırla (oyun zamanı ilişmə olmasın) */
+  warm(types: string[]) { for (const t of types) for (const s of Object.keys(CLIP) as AnimState[]) this.instance(t, s).dispose(); }
 
   /** döyüşçü üçün instance: (növ, hal) şablonundan; 2 faza — addımlar sinxron görünməsin */
   instance(type: string, state: AnimState): InstancedMesh {
     const key = type + ":" + state;
     let t = this.templates.get(key);
     if (!t) {
-      try { t = [0, 0.5].map((ph) => this.template(LOOKS[type], state, ph)); }
+      try { t = [this.template(LOOKS[type], state, Math.random())]; }
       catch (e) { this.broken = true; console.warn(e); throw e; }
       this.templates.set(key, t);
     }
@@ -129,6 +139,7 @@ export class CharLib {
     const ag = src.clone(src.name + state + phase, (t) => nodes.get(t.name) ?? null);
     ag.start(state !== "dead", state === "attack" ? 1.2 : 1);
     if (state !== "dead") ag.goToFrame(ag.from + (ag.to - ag.from) * phase);
+    merged.metadata = { ag };
     return merged;
   }
 }

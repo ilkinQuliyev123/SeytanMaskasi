@@ -31,12 +31,14 @@ export class Unit implements Target {
   alert: Vector3 | null = null; fort = ""; route: { x: number; z: number }[] | null = null; private ri = 0; private dir = 1;
   stun = 0; acc = 0; dist = 0; private blk = false; // acc/dist — oyun dövrəsi üçün (uzaqdakılar seyrək yenilənir)
   private think = Math.random() * 0.25; private wp: Vector3; private bob = Math.random() * 6;
-  anim: AnimState | null = null; private shotT = 0; private moved = 0;
+  anim: AnimState | null = null; private shotT = 0; private moved = 0; private want: AnimState = "idle"; private wantT = 0;
+  far: InstancedMesh | null = null; near = false; // far — uzaq məsafə üçün sadə model
   constructor(scene: Scene, public type: UnitType, weaponId: string, public pos: Vector3, private home: Vector3, public post: Post | null = null) {
     let m: InstancedMesh | null = null;
     if (chars?.has(type.id)) try { m = chars.instance(type.id, "idle"); this.anim = "idle"; } catch { /* sadə modelə keç */ }
     this.mesh = m ?? baseMesh(scene, type).createInstance(type.id);
     this.mesh.metadata = { unit: this };
+    if (m) { this.far = baseMesh(scene, type).createInstance(type.id + "_far"); this.far.metadata = { unit: this }; this.mesh.isVisible = false; if (type.civ) this.far.isPickable = false; }
     if (type.civ) this.mesh.isPickable = false; // güllə mülkilərdən keçir
     this.hp = type.hp;
     this.gun = new Gun(WEAPONS[weaponId] ?? WEAPONS[type.weapons[0]] ?? WEAPONS.scimitar);
@@ -52,9 +54,15 @@ export class Unit implements Target {
     if (this.hp <= 0) {
       if (this.anim) this.setAnim("dead"); else { this.mesh.rotation.x = -Math.PI / 2; this.mesh.position.y += 0.3; }
       this.mesh.isPickable = false;
+      if (this.far) { this.far.rotation.x = -Math.PI / 2; this.far.position.y += 0.3; this.far.isPickable = false; }
     }
   }
   /** animasiya halı dəyişəndə instance başqa şablona keçir */
+  /** görünmə: yaxında animasiyalı model, uzaqda sadə, çox uzaqda heç biri */
+  setLod(near: boolean, visible: boolean) {
+    if (!this.far) { this.mesh.isVisible = visible; return; }
+    this.near = near && visible; this.mesh.isVisible = this.near; this.far.isVisible = visible && !near;
+  }
   setAnim(s: AnimState) {
     if (!chars || !this.anim || this.anim === s) return;
     const old = this.mesh;
@@ -75,6 +83,7 @@ export class Unit implements Target {
     this.pos.y = this.post ? this.post.y : heightAt(this.pos.x, this.pos.z);
     this.mesh.position.copyFrom(this.pos);
     this.mesh.rotation.y = this.facing;
+    if (this.far) { this.far.position.copyFrom(this.pos); this.far.rotation.y = this.facing; }
     if (this.anim && this.mesh.scaling.x > 0) this.mesh.scaling.x = -1;
   }
 
@@ -139,7 +148,11 @@ export class Unit implements Target {
     if (this.post) goal = null; // keşikçi yerindən tərpənmir
     if (goal) this.move(goal, speed * dt, ctx.grid, ctx.mates);
     this.place();
-    if (this.anim) this.setAnim(this.shotT > 0 ? (w.melee ? "attack" : "shoot") : this.moved > 0.02 * dt * 60 ? (speed > this.type.speed ? "run" : "walk") : "idle");
+    if (this.anim) { // hal 0.3 s dəyişməz qalanda keçid (titrəmə olmasın); uzaqda heç keçmir
+      const s: AnimState = this.shotT > 0 ? (w.melee ? "attack" : "shoot") : this.moved > 0.004 ? (speed > this.type.speed ? "run" : "walk") : "idle";
+      if (s !== this.want) { this.want = s; this.wantT = 0; } else this.wantT += dt;
+      if (this.near && (this.wantT > 0.3 || s === "attack" || s === "shoot")) this.setAnim(s);
+    }
     else if (goal && !this.post) this.mesh.position.y += Math.abs(Math.sin((this.bob += dt * speed * 2.2))) * 0.08; // addım
   }
 

@@ -17,7 +17,7 @@ function flameTex(scene: Scene) {
 export class Dragon implements Target {
   ally = true; hp = 1500; pos: Vector3; yaw = 0; rider = false; private root: TransformNode;
   private wings: Mesh[] = []; private flap = 0; private fire: ParticleSystem; private breathT = 0; private cool = 0; private orbit = 0;
-  vy = 0; private target: Target | null = null;
+  vy = 0; private target: Target | null = null; summon: Vector3 | null = null;
 
   constructor(private scene: Scene, x: number, z: number) {
     this.pos = new Vector3(x, heightAt(x, z) + 1.8, z);
@@ -79,6 +79,10 @@ export class Dragon implements Target {
       this.pos.addInPlace(fwd.scale(ride.fw * sp)).addInPlace(right.scale(ride.st * sp * 0.6));
       this.pos.y += (ride.up * 12 - ride.pitch * ride.fw * 14) * dt;
       if (ride.fire) this.breathe(new Vector3(fwd.x, -0.35 - ride.pitch * 0.8, fwd.z), foes, dt);
+    } else if (this.summon) { // çağırılıb: oyunçunun yanına en
+      const goal = this.summon.add(new Vector3(3, 0, 3)); goal.y = heightAt(goal.x, goal.z) + 1.8;
+      const to = goal.subtract(this.pos), d = to.length();
+      if (d > 0.3) { this.pos.addInPlace(to.scale(Math.min(1, (dt * Math.min(35, d * 2)) / d))); this.yaw = Math.atan2(to.x, to.z); }
     } else {
       this.cool -= dt;
       if (!this.target?.alive || this.cool < -6) { // yaxın düşmən axtar (oyunçunun 70 m-də)
