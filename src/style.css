@@ -67,3 +67,25 @@ button.ghost { background: transparent; border-color: #666; }
 .hud .scope i:nth-child(2) { top: 50%; left: calc(50% - 38vmin); height: 1px; width: 76vmin; }
 .hud .scope b { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: #e22; }
 .wlist { text-align: left; font-size: 14px; color: #ccc; line-height: 1.6; margin-bottom: 6px; }
+
+/* transformation wheel */
+.wheel { position: fixed; inset: 0; pointer-events: none; opacity: 0; transform: scale(.92); transition: opacity .18s, transform .18s; background: radial-gradient(circle, rgba(40,0,0,.55), rgba(0,0,0,.8)); font-family: inherit; z-index: 50; }
+.wheel.show { opacity: 1; transform: scale(1); }
+.wdial { position: absolute; left: 50%; top: 50%; width: min(34vmin, 270px); height: min(34vmin, 270px); transform: translate(-50%,-50%); border-radius: 50%; background: radial-gradient(circle, #200 0%, #0a0000 70%); border: 2px solid #c11; box-shadow: 0 0 30px #c11, inset 0 0 30px #600; display: flex; align-items: center; justify-content: center; text-align: center; color: #fff; }
+.wdial i { position: absolute; border-radius: 50%; inset: 8%; border: 1px solid #e33; opacity: .7; }
+.wdial .wr1 { border-style: dashed; animation: wspin 12s linear infinite; }
+.wdial .wr2 { inset: 16%; border-color: #900; }
+.wdial .wr3 { inset: 3%; border-style: dotted; animation: wspin 20s linear infinite reverse; }
+@keyframes wspin { to { transform: rotate(360deg); } }
+.wtxt { position: relative; width: 70%; }
+.wn { font-size: 22px; font-weight: bold; color: #f55; text-shadow: 0 0 10px #e11; }
+.wd { font-size: 12px; color: #ddd; margin-top: 4px; line-height: 1.3; }
+.wh { font-size: 10px; color: #a66; margin-top: 8px; }
+.wslot { position: absolute; width: 64px; transform: translate(-50%,-50%); text-align: center; transition: transform .12s; --c: #e22; }
+.wc { width: 64px; height: 64px; border-radius: 50%; box-sizing: border-box; border: 3px solid var(--c); background: rgba(10,0,0,.85); box-shadow: 0 0 10px var(--c), inset 0 0 12px var(--c); display: flex; align-items: center; justify-content: center; }
+.wi { font-size: 30px; font-weight: bold; color: #fff; text-shadow: 0 0 8px var(--c); }
+.wslot small { display: block; margin-top: 4px; font-size: 11px; color: #ddd; white-space: nowrap; margin-left: -20px; margin-right: -20px; }
+.wslot.sel { transform: translate(-50%,-50%) scale(1.2); z-index: 2; }
+.wslot.sel .wc { box-shadow: 0 0 26px 6px var(--c), inset 0 0 18px var(--c); }
+.wslot.cd { filter: grayscale(1) brightness(.6); }
+.wslot.cd .wi { font-size: 20px; }

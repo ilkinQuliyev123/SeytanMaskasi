@@ -11,6 +11,8 @@ import { Cannon } from "./cannon";
 import { cannonModel } from "./kit";
 import { T } from "../i18n/az";
 import { createHud, endScreen, pauseMenu } from "../ui/ui";
+import { createWheel } from "../ui/wheel";
+import { FORMS } from "./data";
 
 export type { Quality };
 let lockCanvas: HTMLCanvasElement | null = null;
@@ -124,6 +126,16 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
     const g = f.lay.gate, r = f.lay.site.R - 12;
     return new Vector3(f.lay.site.x + Math.sin(g) * r, 0, f.lay.site.z + Math.cos(g) * r);
   };
+  // saat çarxı: Q basılı — çarx açıq, vaxt yavaşıyır; Q burax — seçilir
+  const wheel = createWheel();
+  const items = () => FORMS.map((f) => ({ name: f.name, desc: f.desc, color: f.color, cd: player.watch.cd[f.id] ?? 0 }));
+  const onWheelKey = (e: KeyboardEvent) => {
+    if (e.code !== "KeyQ" || paused || ended) return;
+    if (e.type === "keydown" && !e.repeat && !wheel.isOpen()) { wheel.open(items(), player.formIdx); player.wheelOpen = true; }
+    if (e.type === "keyup" && wheel.isOpen()) { player.formIdx = wheel.close(); player.wheelOpen = false; say(`${FORMS[player.formIdx].name} — E ilə çevril`, 2); }
+  };
+  const onWheelMove = (e: MouseEvent) => { if (wheel.isOpen()) wheel.move(e.movementX, e.movementY); };
+  addEventListener("keydown", onWheelKey); addEventListener("keyup", onWheelKey); addEventListener("mousemove", onWheelMove);
   const onKey = (e: KeyboardEvent) => {
     if (e.code === "KeyF" && !paused) {
       order = order === "follow" ? "attack" : "follow";
@@ -146,7 +158,7 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
 
   scene.onBeforeRenderObservable.add(() => {
     if (paused || ended) return;
-    const dt = Math.min(0.05, engine.getDeltaTime() / 1000);
+    const dt = Math.min(0.05, engine.getDeltaTime() / 1000) * (wheel.isOpen() ? 0.25 : 1); // çarx açıqkən vaxt yavaşıyır
     frame++;
     sky.update(dt, player.pressed("KeyT"));
     player.update(dt, grid, hittable, shot);
@@ -162,6 +174,7 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
       enemies.filter((e) => e.alive && !e.target && !e.post && e.dist < player.lastNoise).sort((a, b) => a.dist - b.dist).slice(0, 6).forEach((e) => (e.alert = pp.clone()));
     }
     const night = sky.isNight, fog = sky.fog;
+    if (player.watch.active?.id === "qalxan") for (const a of allies) if (a.alive && Vector3.Distance(a.pos, pp) < 10) a.hp = Math.min(a.type.hp, a.hp + 12 * dt); // qalxan dəstəni sağaldır
     allies.forEach((u, i) => u.update(dt, { foes: enemies, night, fog, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked }));
     const foes: Target[] = [player, ...allies];
     for (const f of forts) for (const u of f.units) {
@@ -190,6 +203,7 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
     if (!left || !player.alive) return finish(!left);
     if ((hudT -= dt) <= 0) {
       hudT = 0.1;
+      if (wheel.isOpen()) wheel.update(items());
       const g = player.gun, fm = player.watch.active;
       hudRef.update({ hp: player.hp, maxHp: player.maxHp, weapon: g.w.name, ammo: g.ammo, mag: g.w.mag, reloading: g.reloading > 0,
         hour: sky.hour, weather: sky.weather, enemiesLeft: left, enemiesTotal: enemies.length, allies: allies.filter((a) => a.alive).length,
@@ -206,6 +220,7 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
   }
   function quit() {
     removeEventListener("keydown", onKey);
+    removeEventListener("keydown", onWheelKey); removeEventListener("keyup", onWheelKey); removeEventListener("mousemove", onWheelMove); wheel.destroy();
     document.removeEventListener("pointerlockchange", lockChange);
     canvas.removeEventListener("click", clickLock);
     hudRef.destroy();

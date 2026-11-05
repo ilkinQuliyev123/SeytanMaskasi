@@ -1,9 +1,10 @@
 // Oyunçu: oni maskalı samuray. Üçüncü şəxs kamera (çiyin üstü), sağ klik — nişan/optika, 5 silah, saat formaları.
-import { Color3, FreeCamera, Mesh, Ray, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
+import { Color3, FreeCamera, Mesh, MeshBuilder, Ray, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
 import { FORMS, WEAPONS } from "./data";
 import { Gun, HALF, heightAt, Watch, type Grid } from "./logic";
 import { unitModel, weaponModel } from "./kit";
-import type { Target } from "./units";
+import type { Target, Unit } from "./units";
+import { formModel, watchModel } from "./forms";
 
 export class Player implements Target {
   pos = new Vector3(0, 0, 14); yaw = 0; pitch = 0.12; hp = 200; maxHp = 200;
@@ -11,6 +12,8 @@ export class Player implements Target {
   camera: FreeCamera; mesh: Mesh; ally = true; private gunMeshes: Mesh[];
   private keys = new Set<string>(); private mat: StandardMaterial; shooting = false;
   lastNoise = 0; // son atəşin səs radiusu (düşmənlər eşidir)
+  wheelOpen = false; flyH = 0; private forms: Record<string, Mesh> = {}; private flash: Mesh; private flashT = 0;
+  private dome: Mesh; private dial: Mesh; private wasForm = "";
 
   constructor(private scene: Scene, weapons: string[], private canvas: HTMLCanvasElement) {
     this.guns = weapons.map((w) => new Gun(WEAPONS[w]));
@@ -23,13 +26,18 @@ export class Player implements Target {
       g.parent = this.mesh; g.position.set(0.32, 1.28, 0.3); g.isPickable = false;
       return g;
     });
+    const w = watchModel(scene); // sol qolda saat
+    w.band.parent = this.mesh; w.band.position.set(-0.4, 0.95, 0.12); w.band.rotation.x = 0.15; w.band.isPickable = false; this.dial = w.dial;
+    const fm = (hex: string, a: number) => { const m = new StandardMaterial("fx" + hex + a, scene); m.emissiveColor = Color3.FromHexString(hex); m.disableLighting = true; m.alpha = a; return m; };
+    this.flash = MeshBuilder.CreateSphere("flash", { diameter: 1, segments: 8 }, scene); this.flash.material = fm("#ff2a2a", 0.5); this.flash.isPickable = false; this.flash.setEnabled(false);
+    this.dome = MeshBuilder.CreateSphere("dome", { diameter: 9, segments: 12 }, scene); this.dome.material = fm("#4a8cff", 0.18); this.dome.isPickable = false; this.dome.setEnabled(false);
     this.camera = new FreeCamera("cam", new Vector3(0, 5, 0), scene);
     this.camera.minZ = 0.3; this.camera.maxZ = 2400; this.camera.fov = 1.0;
 
     addEventListener("keydown", (e) => this.key(e, true));
     addEventListener("keyup", (e) => this.key(e, false));
     canvas.addEventListener("mousemove", (e) => {
-      if (document.pointerLockElement !== canvas) return;
+      if (document.pointerLockElement !== canvas || this.wheelOpen) return;
       const k = 0.0025 * this.camera.fov; // nişanda həssaslıq azalır
       this.yaw += e.movementX * k;
       this.pitch = Math.max(-0.7, Math.min(0.9, this.pitch + e.movementY * k));
@@ -44,7 +52,10 @@ export class Player implements Target {
   get gun() { return this.guns[this.cur]; }
   /** HUD üçün: 0 adi, 1 nişan, 2 snayper optikası */
   get scope(): 0 | 1 | 2 { return !this.aiming || this.watch.active ? 0 : this.gun.w.id === "sniper" ? 2 : 1; }
-  hit(dmg: number) { this.hp = Math.max(0, this.hp - dmg * (this.watch.active?.id === "qaya" ? 0.25 : 1)); }
+  hit(dmg: number) { const f = this.watch.active?.id; this.hp = Math.max(0, this.hp - dmg * (f === "qalxan" ? 0 : f === "qaya" ? 0.25 : 1)); }
+  /** düşmənin görmə əmsalı: kölgə demək olar görünmür, kiçik və əyilmiş çətin görünür */
+  get stealth() { const f = this.watch.active?.id; return f === "kolge" ? 0.12 : f === "kicik" ? 0.35 : this.crouch ? 0.6 : 1; }
+  get formMesh() { const f = this.watch.active; return f ? (this.forms[f.id] ??= Object.assign(formModel(this.scene, f.id), { isPickable: false })) : null; }
 
   private key(e: KeyboardEvent, down: boolean) {
     const k = e.code;
@@ -53,7 +64,6 @@ export class Player implements Target {
     if (k === "KeyC") this.crouch = !this.crouch;
     if (k === "KeyR") this.gun.reload();
     if (k.startsWith("Digit")) { const i = +k.slice(5) - 1; if (i >= 0 && i < this.guns.length) this.cur = i; }
-    if (k === "KeyQ") this.formIdx = (this.formIdx + 1) % FORMS.length;
     if (k === "KeyE") this.watch.active ? this.watch.end() : this.watch.transform(this.formIdx);
   }
   pressed(code: string) { return this.keys.has(code); }
@@ -69,35 +79,51 @@ export class Player implements Target {
     if (this.crouch) speed *= 0.5;
     if (this.aiming) speed *= 0.5;
     if (f?.id === "ildirim") speed *= 3;
+    if (f?.id === "qanad") speed *= 1.8;
+    // uçuş (Qanad): Space qalx, Ctrl en; forma bitəndə yavaşca enir
+    this.flyH = f?.id === "qanad" ? Math.max(0, Math.min(40, this.flyH + ((this.pressed("Space") ? 1 : 0) - (this.pressed("ControlLeft") ? 1 : 0)) * 8 * dt)) : Math.max(0, this.flyH - 6 * dt);
     if (fw || st) {
       const s = Math.sin(this.yaw), c = Math.cos(this.yaw), n = Math.hypot(fw, st);
       this.pos.x += ((s * fw + c * st) / n) * speed * dt;
       this.pos.z += ((c * fw - s * st) / n) * speed * dt;
     }
-    for (const o of grid.near(this.pos.x, this.pos.z)) { // maneələrdən keçmə
+    const free = f?.id === "horumcek" || this.flyH > 13; // hörümçək divara dırmaşır, uçan üstündən keçir
+    if (!free) for (const o of grid.near(this.pos.x, this.pos.z)) { // maneələrdən keçmə
       const dx = this.pos.x - o.x, dz = this.pos.z - o.z, d = Math.hypot(dx, dz), r = o.r + 0.6;
       if (d < r && d > 1e-4) { this.pos.x = o.x + (dx / d) * r; this.pos.z = o.z + (dz / d) * r; }
     }
     const lim = HALF - 30;
     this.pos.x = Math.max(-lim, Math.min(lim, this.pos.x)); this.pos.z = Math.max(-lim, Math.min(lim, this.pos.z));
-    this.pos.y = heightAt(this.pos.x, this.pos.z);
+    this.pos.y = heightAt(this.pos.x, this.pos.z) + this.flyH;
     // görünüş
-    const sc = f?.id === "qaya" ? 1.5 : this.crouch ? 0.75 : 1, scope = this.scope;
-    this.mesh.scaling.setAll(sc);
-    this.mesh.position.copyFrom(this.pos);
-    this.mesh.rotation.y = this.yaw;
-    this.mesh.isVisible = scope !== 2;
-    this.gunMeshes.forEach((g, i) => (g.isVisible = i === this.cur && !f && scope !== 2));
-    this.mat.diffuseColor = f ? Color3.FromHexString(f.color) : Color3.White();
+    const sc = f?.id === "qaya" ? 1.5 : f?.id === "kicik" ? 0.4 : this.crouch ? 0.75 : 1, scope = this.scope;
+    const attackForm = !!f && ["alov", "qaya", "buz", "horumcek", "maqnit"].includes(f.id);
+    if ((f?.id ?? "") !== this.wasForm) { // çevrilmə anı — işıq partlayışı
+      this.wasForm = f?.id ?? ""; this.flashT = 0.45;
+      (this.flash.material as StandardMaterial).emissiveColor = Color3.FromHexString(f?.color ?? "#ff2a2a");
+      for (const m of Object.values(this.forms)) m.isVisible = false;
+    }
+    const body = this.formMesh ?? this.mesh;
+    this.mesh.isVisible = !f && scope !== 2;
+    for (const m of [this.mesh, body]) { m.scaling.setAll(sc); m.position.copyFrom(this.pos); m.rotation.y = this.yaw; }
+    if (f) body.isVisible = f.id === "kolge" ? Math.random() < 0.15 : scope !== 2; // kölgə titrəyir
+    if (f?.id === "qanad") body.position.y += Math.sin(performance.now() / 150) * 0.1;
+    this.gunMeshes.forEach((g, i) => { g.isVisible = i === this.cur && !attackForm && scope !== 2 && f?.id !== "kolge"; g.parent = body; g.position.set(0.32, f?.id === "kicik" ? 0.8 : 1.28, 0.3); });
+    (this.dial.material as StandardMaterial).emissiveColor = Color3.FromHexString(f ? f.color : (this.watch.cd[FORMS[this.formIdx].id] ?? 0) > 0 ? "#551015" : "#ff1e2a");
+    this.flash.setEnabled(this.flashT > 0);
+    if (this.flashT > 0) { this.flashT -= dt; this.flash.position.copyFrom(this.pos).y += 1.2; this.flash.scaling.setAll(1 + (0.45 - this.flashT) * 14); }
+    this.dome.setEnabled(f?.id === "qalxan"); this.dome.position.copyFrom(this.pos);
     // kamera: çiyin üstü; nişanda yaxın; optikada gözdən
     const fov = scope === 2 ? 0.22 : scope === 1 ? 0.62 : 1.0;
     this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 12);
     const fwd = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)), right = new Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
     let cam: Vector3;
     if (scope === 2) cam = this.pos.add(new Vector3(0, 1.75 * sc, 0)).add(fwd.scale(0.4));
+    else if (f?.id === "kicik") { cam = this.pos.add(fwd.scale(-2.6)).add(right.scale(0.5)).add(new Vector3(0, 1.2 + this.pitch * 2, 0)); cam.y = Math.max(cam.y, heightAt(cam.x, cam.z) + 0.4); }
     else {
       const back = scope === 1 ? 2.4 : 5.5, side = scope === 1 ? 0.75 : 1.1;
       cam = this.pos.add(fwd.scale(-back)).add(right.scale(side)).add(new Vector3(0, (scope === 1 ? 1.9 : 2.6) + this.pitch * (scope === 1 ? 1.5 : 4), 0));
+      if (f?.id === "qaya") cam = cam.add(fwd.scale(-2)).add(new Vector3(0, 1, 0));
       cam.y = Math.max(cam.y, heightAt(cam.x, cam.z) + 0.8);
     }
     this.camera.position.copyFrom(cam);
@@ -109,6 +135,20 @@ export class Player implements Target {
 
   private fire(units: Target[], onShot: (a: Vector3, b: Vector3, hit: boolean) => void) {
     const f = this.watch.active, from = this.pos.add(new Vector3(0, 1.5, 0));
+    if (f?.id === "buz" || f?.id === "horumcek" || f?.id === "maqnit") { // dondurma / tor / maqnit
+      if (this.gun.cool > 0) return;
+      const fwd = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+      if (f.id === "horumcek") { const { point, unit } = this.aim(60); if (unit && !unit.ally && "stun" in unit) (unit as Unit).stun = 7; onShot(from, point, !!unit); this.gun.cool = 0.7; }
+      else for (const u of units) {
+        if (u.ally || !u.alive || !("stun" in u)) continue;
+        const d = u.pos.subtract(this.pos), dist = d.length();
+        if (f.id === "buz" && dist < 26 && Vector3.Dot(d.normalize(), fwd) > 0.88) { (u as Unit).stun = 5; u.hit(15); onShot(from, u.pos.add(new Vector3(0, 1, 0)), true); }
+        if (f.id === "maqnit" && dist < 24) (u as Unit).disarm();
+      }
+      if (f.id !== "horumcek") this.gun.cool = f.id === "buz" ? 0.9 : 2;
+      this.lastNoise = 10;
+      return;
+    }
     if (f?.id === "alov" || f?.id === "qaya") { // forma hücumu
       if (this.gun.cool > 0) return;
       this.gun.cool = f.id === "alov" ? 0.6 : 1.2;

@@ -58,9 +58,16 @@ export const MAPS: GameMap[] = [
 // Saat formaları (orijinal). Faza 1: ilk üçü.
 export interface Form { id: string; name: string; desc: string; dur: number; cd: number; color: string }
 export const FORMS: Form[] = [
-  { id: "alov", name: "Alov", desc: "Od topları atır (Sol klik)", dur: 20, cd: 30, color: "#ff6a00" },
+  { id: "alov", name: "Alov adam", desc: "Od topu (sol klik)", dur: 25, cd: 30, color: "#ff6a00" },
   { id: "ildirim", name: "İldırım", desc: "3 qat sürət", dur: 15, cd: 25, color: "#ffe14d" },
-  { id: "qaya", name: "Qaya", desc: "Zərər 75% az, yerə zərbə (Sol klik)", dur: 20, cd: 35, color: "#8a8170" },
+  { id: "qaya", name: "Qaya nəhəngi", desc: "Zərər 75% az, yerə zərbə (sol klik)", dur: 20, cd: 35, color: "#8a8170" },
+  { id: "kolge", name: "Kölgə", desc: "Görünməzlik — keşikçilər görmür", dur: 18, cd: 40, color: "#8a4fd0" },
+  { id: "buz", name: "Buz", desc: "Qarşındakıları dondurur (sol klik)", dur: 20, cd: 35, color: "#7fd8ff" },
+  { id: "qanad", name: "Qanad", desc: "Uçuş: Space qalx, Ctrl en", dur: 25, cd: 40, color: "#e0c070" },
+  { id: "horumcek", name: "Hörümçək", desc: "Tor at (sol klik), divarlardan keç", dur: 20, cd: 35, color: "#7aff5a" },
+  { id: "maqnit", name: "Maqnit", desc: "Tüfəngləri əllərindən çək (sol klik)", dur: 12, cd: 45, color: "#c0c6d0" },
+  { id: "kicik", name: "Kiçik", desc: "Balacalaş, gizli keç", dur: 25, cd: 30, color: "#7ab648" },
+  { id: "qalxan", name: "Qalxan", desc: "Sənə zərər yox, dəstə sağalır", dur: 15, cd: 50, color: "#4a8cff" },
 ];
 
 export interface ArmySetup { samurai: number; ninja: number; samuraiWeapon: string; ninjaWeapon: string; enemies: number; weapons: string[] }

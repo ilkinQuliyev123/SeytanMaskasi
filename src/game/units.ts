@@ -4,7 +4,7 @@ import { UNITS, WEAPONS, type UnitType } from "./data";
 import { canSee, Gun, heightAt, hitChance, type Grid } from "./logic";
 import { unitModel } from "./kit";
 
-export interface Target { pos: Vector3; alive: boolean; hit(dmg: number): void; ally: boolean }
+export interface Target { pos: Vector3; alive: boolean; hit(dmg: number): void; ally: boolean; stealth?: number } // stealth: görünmə əmsalı (1 — adi)
 export type Post = { y: number; face: number };
 export type Ctx = {
   foes: Target[]; night: boolean; fog: number; leader: Vector3; order: "follow" | "attack"; grid: Grid; mates: Unit[];
@@ -24,7 +24,7 @@ function baseMesh(scene: Scene, t: UnitType) {
 export class Unit implements Target {
   mesh: InstancedMesh; hp: number; gun: Gun; facing = 0; target: Target | null = null;
   alert: Vector3 | null = null; fort = ""; route: { x: number; z: number }[] | null = null; private ri = 0; private dir = 1;
-  acc = 0; dist = 0; private blk = false; // acc/dist — oyun dövrəsi üçün (uzaqdakılar seyrək yenilənir)
+  stun = 0; acc = 0; dist = 0; private blk = false; // acc/dist — oyun dövrəsi üçün (uzaqdakılar seyrək yenilənir)
   private think = Math.random() * 0.25; private wp: Vector3; private bob = Math.random() * 6;
   constructor(scene: Scene, public type: UnitType, weaponId: string, public pos: Vector3, private home: Vector3, public post: Post | null = null) {
     this.mesh = baseMesh(scene, type).createInstance(type.id);
@@ -43,6 +43,8 @@ export class Unit implements Target {
     this.hp -= dmg;
     if (this.hp <= 0) { this.mesh.rotation.x = -Math.PI / 2; this.mesh.position.y += 0.3; this.mesh.isPickable = false; }
   }
+  /** maqnit: tüfəngi əlindən alınır — qılınca keçir */
+  disarm() { if (!this.gun.w.melee) this.gun = new Gun(WEAPONS.scimitar); }
   setRoute(r: { x: number; z: number }[]) {
     this.route = r; this.ri = Math.floor(Math.random() * r.length); this.dir = Math.random() < 0.5 ? 1 : -1;
     const p = r[this.ri]; this.pos.set(p.x, 0, p.z); this.wp.set(p.x, 0, p.z); this.place();
@@ -55,6 +57,7 @@ export class Unit implements Target {
 
   update(dt: number, ctx: Ctx) {
     if (!this.alive) return;
+    if (this.stun > 0) { this.stun -= dt; return; } // donub / tora düşüb
     this.gun.update(dt);
     if (!this.type.civ && (this.think -= dt) <= 0) { // mülkilər döyüşmür // saniyədə 4 dəfə «düşünür» — prosessor qənaəti
       this.think = 0.25;
@@ -64,9 +67,10 @@ export class Unit implements Target {
       for (const f of ctx.foes) {
         if (!f.alive) continue;
         const dx = f.pos.x - this.pos.x, dz = f.pos.z - this.pos.z, d = dx * dx + dz * dz;
-        if (d < bd && (this.target === f || canSee(dx / k, dz / k, this.facing, ctx.night, false, ctx.fog) || (this.ally && d < 900))) { bd = d; best = f; }
+        const sv = k * (f.stealth ?? 1); // görünməz/balaca hədəfi görmək çətindir
+        if (d < bd && ((this.target === f && sv > 0.3 * k) || canSee(dx / sv, dz / sv, this.facing, ctx.night, false, ctx.fog) || (this.ally && d < 900))) { bd = d; best = f; }
       }
-      if (best) this.target = best;
+      this.target = best;
       if (!had && this.target && !this.ally) { // həyəcan: yalnız ən yaxın 4 yoldaş (30 m) gəlir — hamısı birdən tökülmür
         const near = ctx.mates.filter((m) => m !== this && m.alive && !m.target && !m.alert && !m.post && Vector3.DistanceSquared(m.pos, this.pos) < 900);
         near.sort((a, b) => Vector3.DistanceSquared(a.pos, this.pos) - Vector3.DistanceSquared(b.pos, this.pos));
