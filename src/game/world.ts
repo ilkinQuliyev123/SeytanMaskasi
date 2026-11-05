@@ -1,6 +1,6 @@
 // Dünya: 2.6 km relyef, 4 dağ, yollar, sıx meşə, mərkəzdə yapon saray kompleksi (dojo zalı, gölməçə, fənərlər).
 import { Color3, Matrix, Mesh, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector2, Vector3, VertexBuffer } from "@babylonjs/core";
-import { Grid, HALF, heightAt, rng, roadCoords, roadPoint, SITES, type Site } from "./logic";
+import { Grid, HALF, HAMLETS, heightAt, hillsAt, rng, roadCoords, roadPoint, SITES, type Site } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
 import { environment, pbr, terrainMaterial } from "./materials";
 
@@ -76,6 +76,7 @@ export function buildWorld(scene: Scene, quality: Quality) {
   for (const st of SITES) roadOf(scene, st).material = roadMat;
 
   buildPalace(scene, grid, anchors);
+  buildHamlets(scene, grid, anchors);
   buildForest(scene, quality);
   return { ground, grid, anchors };
 }
@@ -94,6 +95,7 @@ function buildForest(scene: Scene, quality: Quality) {
   const free = (x: number, z: number) => {
     if (Math.abs(x) < 50 && z > -44 && z < 46) return false;
     if (Math.abs(x) < 9 && z > 40 && z < 70) return false;
+    if (HAMLETS.some((v) => Math.hypot(x - v.x, z - v.z) < v.r + 22)) return false;
     for (const st of SITES) {
       if (Math.hypot(x - st.x, z - st.z) < st.R + 62) return false;
       const { s, lat, L } = roadCoords(st, x, z);
@@ -114,6 +116,35 @@ function buildForest(scene: Scene, quality: Quality) {
   place(2600 * k, 1500, 180);
   place(1300 * k, HALF * 2 - 120, 0);
   [pine, broad, maple].forEach((ms, i) => ms.forEach((m) => scatter(m, lists[i])));
+}
+
+// --- yapon kəndləri: taxta-suvaq evlər, qalın damlar, düyü tarlaları, fənərlər, quyu ---
+function buildHamlets(scene: Scene, grid: Grid, anchors: Vector3[]) {
+  const k = new Kit(scene), glow = new Kit(scene), field = new Kit(scene), r = rng(5);
+  k.texMap = { [WOOD]: ["cedar", "#8a6448"], [PLAST]: ["whitewall", "#f2eadc"], [SLATE]: ["slate", "#7a7060"], [STONE]: ["jstone", "#c8c8c8"] };
+  for (const v of HAMLETS) {
+    const y0 = hillsAt(v.x, v.z), n = 9;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + r() * 0.3, d = 13 + r() * 12, x = v.x + Math.sin(a) * d, z = v.z + Math.cos(a) * d;
+      const w = 6 + r() * 3, dd = 5 + r() * 2, rot: [number, number, number] = [0, a, 0];
+      k.box(w + 0.6, 0.5, dd + 0.6, STONE, [x, y0 + 0.25, z], rot).box(w, 3, dd, WOOD, [x, y0 + 2, z], rot).box(w + 0.02, 1.2, dd + 0.02, PLAST, [x, y0 + 2.6, z], rot)
+        .roof(w + 2.4, dd + 2.4, 2.6, SLATE, [x, y0 + 4.8, z], a, 0.45);
+      glow.box(1.2, 0.8, 0.1, "#ffffff", [x - Math.sin(a) * (dd / 2 + 0.05), y0 + 2.1, z - Math.cos(a) * (dd / 2 + 0.05)], rot);
+      grid.add({ x, z, r: Math.max(w, dd) / 2 + 0.4 });
+    }
+    k.cyl(1, 2.2, 2.4, STONE, [v.x, y0 + 0.5, v.z], undefined, 10); grid.add({ x: v.x, z: v.z, r: 1.4 }); // quyu
+    glow.cyl(0.6, 0.5, 0.5, "#ffffff", [v.x + 3, y0 + 2.4, v.z], undefined, 8); k.cyl(2.4, 0.15, 0.15, WOOD, [v.x + 3, y0 + 1.2, v.z], undefined, 5);
+    anchors.push(new Vector3(v.x + 3, y0 + 2.4, v.z));
+    for (let j = 0; j < 4; j++) { // düyü tarlaları (su əks etdirir)
+      const a = j * 1.6 + 0.4, x = v.x + Math.sin(a) * (v.r + 14), z = v.z + Math.cos(a) * (v.r + 14);
+      field.box(16, 0.2, 12, "#2c4a3a", [x, heightAt(x, z) + 0.05, z], [0, a, 0]);
+    }
+  }
+  for (const m of k.buildAll("hamlet", vcMat(scene, "vcWorld", 0.05))) m.metadata = { solid: true };
+  glow.build("hamletGlow", glowMat(scene, "#ffb35a")).isPickable = false;
+  const fm = new StandardMaterial("rice", scene);
+  fm.diffuseColor = new Color3(0.12, 0.2, 0.15); fm.specularColor = new Color3(0.8, 0.85, 0.9); fm.specularPower = 120;
+  field.build("rice", fm).isPickable = false;
 }
 
 // --- yapon saray kompleksi ---

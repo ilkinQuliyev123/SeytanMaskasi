@@ -148,6 +148,9 @@ const MODELS: Record<string, (k: Kit) => unknown> = {
   samurai, ninja, yeniceri: (k) => yeniceri(k, "#8c1c1c", "bork"), ottoman: (k) => yeniceri(k, "#2e5d3a"), mongol,
   okcu: (k) => yeniceri(k, "#3d5a2a", "bork").box(0.04, 1.2, 0.05, "#5a3a22", [-0.42, 1.2, 0.1]),
   mulki: (k) => yeniceri(k, "#7a5a3a"),
+  koylu: (k) => { for (const s of [-1, 1]) k.cyl(0.7, 0.14, 0.12, "#2a2a30", [s * 0.13, 0.35, 0]).cyl(0.6, 0.14, 0.12, "#4a5a6a", [s * 0.33, 1.15, 0.03], [0.1, 0, s * 0.12]);
+    return k.cyl(1.0, 0.5, 0.62, "#4a5a6a", [0, 1.0, 0], undefined, 10).cyl(0.1, 0.52, 0.52, "#2a2a30", [0, 1.15, 0], undefined, 10)
+      .sph(0.36, SKIN, [0, 1.72, 0]).cyl(0.3, 0.06, 1.0, "#c8b070", [0, 2.0, 0], undefined, 12); }, // kimono + saman papaq (kasa)
   mulki2: (k) => k.cyl(1.5, 0.4, 0.8, "#5e3f5e", [0, 0.78, 0], undefined, 10).sph(0.36, SKIN, [0, 1.75, 0])
     .sph(0.46, "#d9cdb4", [0, 1.8, -0.04], [1, 1.1, 1]).cyl(0.55, 0.12, 0.12, "#5e3f5e", [0.3, 1.2, 0.05], [0.1, 0, 0.1], 6).cyl(0.55, 0.12, 0.12, "#5e3f5e", [-0.3, 1.2, 0.05], [0.1, 0, -0.1], 6),
   sipahi: (k) => horse(k, "#7a1f1f", (r) => yeniceri(r, "#7a1f1f").cyl(0.6, 0.02, 0.22, "#8a8f96", [0, 2.35, 0], undefined, 8), "#3a2618"),

@@ -30,6 +30,13 @@ export function roadPoint(st: Site, s: number) {
   return { x: dx * s + dz * o, z: dz * s - dx * o };
 }
 
+
+/** yapon kəndləri: saray ətrafında və şimal yolunun boyunca (yol boyu s, yan sürüşmə) */
+export const HAMLETS = [[110, 55], [300, -60], [520, 60], [760, -55]].map(([s, side], i) => {
+  const p = roadPoint(SITES[0], s);
+  return { id: i, x: p.x + side, z: p.z, r: 32 };
+});
+
 export function heightAt(x: number, z: number): number {
   let h = hillsAt(x, z);
   for (const [mx, mz] of MOUNTAINS) h += 90 * Math.exp(-((x - mx) ** 2 + (z - mz) ** 2) / 7200);
@@ -41,6 +48,7 @@ export function heightAt(x: number, z: number): number {
     const d = Math.hypot(x - st.x, z - st.z);
     if (d < st.R + 70) h = lerp(siteBase(st), h, smooth(st.R + 25, st.R + 70, d));
   }
+  for (const v of HAMLETS) { const d = Math.hypot(x - v.x, z - v.z); if (d < v.r + 30) h = lerp(hillsAt(v.x, v.z), h, smooth(v.r, v.r + 30, d)); }
   return h;
 }
 

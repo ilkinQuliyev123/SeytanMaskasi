@@ -36,6 +36,7 @@ export const UNITS: Record<string, UnitType> = {
   sipahi: { id: "sipahi", name: "Süvari (sipahi)", hp: 170, speed: 8.5, color: "#7a1f1f", weapons: ["scimitar"], ally: false, mounted: true },
   atli_okcu: { id: "atli_okcu", name: "Atlı oxçu", hp: 140, speed: 8, color: "#5a3d22", weapons: ["bow"], ally: false, mounted: true },
   mulki: { id: "mulki", name: "Kəndli", hp: 50, speed: 2.2, color: "#8a6a48", weapons: [], ally: false, civ: true },
+  koylu: { id: "koylu", name: "Yapon kəndlisi", hp: 50, speed: 1.8, color: "#4a5a6a", weapons: [], ally: true, civ: true },
   mulki2: { id: "mulki2", name: "Kəndli qadın", hp: 50, speed: 2.0, color: "#6a4a6a", weapons: [], ally: false, civ: true },
   mongol: { id: "mongol", name: "Monqol döyüşçüsü", hp: 110, speed: 4.6, color: "#7a5230", weapons: ["bow", "scimitar"], ally: false },
 };

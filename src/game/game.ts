@@ -1,7 +1,7 @@
 // Oyun dövrəsi: səhnə, dünya, səma, qəsrlər, oyunçu, dəstə, düşmən ordusu, toplar, HUD, qələbə/məğlubiyyət.
 import { Color3, DefaultRenderingPipeline, Engine, GlowLayer, ImageProcessingConfiguration, MeshBuilder, PointLight, Ray, Scene, StandardMaterial, Vector3, type LinesMesh } from "@babylonjs/core";
 import { FORTS, UNITS, type ArmySetup, type Fort, type GameMap } from "./data";
-import { fortLayout, heightAt, SITES, type FortLayout } from "./logic";
+import { fortLayout, HAMLETS, heightAt, roadPoint, SITES, type FortLayout } from "./logic";
 import { Player } from "./player";
 import { Sky } from "./sky";
 import { spawn, Unit, type Post, type Target } from "./units";
@@ -74,6 +74,13 @@ export function runGame(engine: Engine, canvas: HTMLCanvasElement, map: GameMap,
     return { fort, lay, flagMat, cleared: false, alarmed: false, ...garrison(scene, lay, fort, setup.enemies) };
   });
   const civs = forts.flatMap((f) => f.civs);
+  // yapon kəndliləri: kəndlərdə gəzir; bəziləri yolla kənddən-kəndə gedir
+  for (const v of HAMLETS) for (let i = 0; i < 10; i++) {
+    const route = Array.from({ length: 10 }, (_, j) => ({ x: v.x + Math.sin(j * 0.63) * (8 + (j % 3) * 5), z: v.z + Math.cos(j * 0.63) * (8 + (j % 3) * 5) }));
+    const c = new Unit(scene, UNITS.koylu, "", Vector3.Zero(), Vector3.Zero()); c.setRoute(route); civs.push(c);
+  }
+  const roadRoute = Array.from({ length: 40 }, (_, j) => roadPoint(SITES[0], 60 + j * 22));
+  for (let i = 0; i < 12; i++) { const c = new Unit(scene, UNITS.koylu, "", Vector3.Zero(), Vector3.Zero()); c.setRoute(roadRoute); civs.push(c); }
   const enemies = forts.flatMap((f) => f.units), cannons = forts.flatMap((f) => f.cannons);
   const hittable: Target[] = [...enemies, ...cannons];
   if (at) { const f = forts.find((x) => x.fort.id === at) ?? forts[0]; if (f) { const g = f.lay.gate, R = f.lay.site.R + 70; player.pos.set(f.lay.site.x + Math.sin(g) * R, 0, f.lay.site.z + Math.cos(g) * R); player.yaw = g + Math.PI; } }
