@@ -51,7 +51,7 @@ export class Cannon implements Target {
     }
     if (!this.alive || !alarmed || this.fl || (this.cool -= dt) > 0) return null;
     let best: Target | null = null, bd = 130;
-    for (const t of foes) { const d = Vector3.Distance(t.pos, this.pos); if (t.alive && d > 20 && d < bd) { bd = d; best = t; } }
+    for (const t of foes) { const d = Vector3.Distance(t.pos, this.pos); if (t.alive && d > 20 && d < bd && t.pos.y - groundY(t.pos.x, t.pos.z) < 6) { bd = d; best = t; } } // havadakını vura bilmir
     if (!best) return null;
     const b = best.pos.clone(); b.y = groundY(b.x, b.z);
     this.fl = { a: this.pos.add(new Vector3(0, 1.2, 0)), b, t: 0, dur: 1.6 + bd / 110 };

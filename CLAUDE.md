@@ -78,6 +78,19 @@ Son commit `57a23fd` (GitHub private: ilkinQuliyev123/SeytanMaskasi). Xəritə 1
 9. Binalar: qutu evlər əvəzinə modul tikinti dəsti (CC0 orta əsr/şərq evləri) — ən çox fərq yaradan addımlardan biri.
 - **Dürüst qeyd:** Bannerlord-un minimum tələbi GTX 660 + 6 GB RAM-dır; istifadəçinin noutbuku (HD 4400, 4 GB) bundan aşağıdır. Bannerlord səviyyəsi bu kompüterdə heç bir mühərriklə mümkün deyil; hədəf — «stilizə, amma zəngin və hamar». Güclü kompüter olarsa: Unreal Engine 5 + pulsuz Marketplace/Fab aktivləri.
 
+## Vəziyyət (06.11.2026 axşam — /compact əvvəli, layihə dayandırıldı)
+Auditdən DÜZƏLDİLDİ (istifadəçi hələ oynamayıb): #1 dinləyici sızması (Player.dispose/AbortController), #2 şablon görünməzlik titrəməsi,
+#3 əjdaha ölür → yerə enir, 300 can yığanda qalxır + xəbərdarlıq, #5 Esc-də çarx bağlanır, #6 düşmən atəş səsi silaha görə,
+#7 əjdahadan düzgün düşmə, #8 F hücum → ən yaxın düşmənə davam, #12 ölüm → yaxındakı 3 yoldaş meyitə gəlir, #13 top havadakını hədəf almır,
+kamera toqquşması (raycast), vurma işarəsi (hit marker). Qalan audit bəndləri: #4, #9, #10, #11, #14.
+
+**Ssenari testləri:** `src/test/scenarios.ts`, `?test` ilə (100 düşmən; TEST rejimində oyun dövrəsi setInterval ilə, sabit dt 0.06,
+render ölçüsü 1/8 — headless virtual zamanda rAF işləmir). Yoxlayır: hərəkət, yerə oturma, maneə içində əsgər, divardan keçmə,
+əjdahaya minmək/uçmaq/düşmək, tullanma. Nəticə səhifə başlığında `TEST n/m`. **Diqqət:** Git Bash-dan msedge stdout gəlmir —
+PowerShell ilə işlət: `& $edge --headless=new --use-angle=swiftshader --enable-unsafe-swiftshader --virtual-time-budget=200000 --window-size=800,450 --user-data-dir=E:\tmp\pN --no-first-run --dump-dom "http://127.0.0.1:4173/?test"`.
+Son run 600 s-də bitmədi (çox yavaş) — sabah: test zamanı kölgə/hissəcik/post-effektləri söndür, düşmən 30-a endir, ya da yalnız seçilmiş ssenarini işlət (`?test=dragon`).
+Əvvəlki (zamanı düzgün ölçməyən) run-da «yerə oturma» və «maneə içində yoxdur» KEÇDİ; «əjdahaya minmək», «tullanma» o zaman ölçülə bilmədi — yenidən yoxla.
+
 ## Kod auditi — məntiq xətaları (06.11 gecə, kodu oxuyaraq tapdım; sabah düzəlt)
 1. **Yaddaş/klaviatura sızması:** `Player` konstruktoru `window`-a keydown/keyup/mouseup qoşur və heç vaxt silmir → menyuya qayıdıb yenidən oynayanda köhnə oyunçu da düymələri tutur. Düzəliş: `Player.dispose()` + `quit()`-də çağır.
 2. **Görünməzlik titrəməsi:** `CharLib.tick()` istifadə olunmayan şablonu `setEnabled(false)` edir; əsgər yeni hala keçəndə instance 0.5 s-ə qədər görünmür. Düzəliş: `instance()` içində şablonu dərhal `setEnabled(true)` et.

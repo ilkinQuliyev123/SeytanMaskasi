@@ -24,5 +24,10 @@ if (new URLSearchParams(location.search).has("auto")) {
   addEventListener("unhandledrejection", (e) => (document.title = "ERR " + String(e.reason)));
   runGame(engine, canvas, MAPS[0], setup, quality, home, new URLSearchParams(location.search).get("at") ?? undefined);
   setTimeout(() => { if (!document.title.startsWith("ERR")) document.title = `OK fps=${engine.getFps().toFixed(0)} ui=${document.getElementById("ui")!.innerText.slice(0, 120).replace(/\s+/g, " ")}`; }, 8000);
+} else if (new URLSearchParams(location.search).has("test")) { // real ssenari testləri
+  addEventListener("error", (e) => (document.title = "ERR " + e.message));
+  await runGame(engine, canvas, MAPS[0], { ...setup, enemies: 100 }, quality, home);
+  const { runScenarios } = await import("./test/scenarios");
+  runScenarios((window as unknown as { __game: Parameters<typeof runScenarios>[0] }).__game).catch((e) => (document.title = "ERR " + e));
 } else if (new URLSearchParams(location.search).has("setup")) setupMenu(MAPS[0], setup, () => {}, home); // UI yoxlaması üçün
 else home();

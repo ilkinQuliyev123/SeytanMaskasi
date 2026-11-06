@@ -71,7 +71,9 @@ export class CharLib {
       catch (e) { this.broken = true; console.warn(e); throw e; }
       this.templates.set(key, t);
     }
-    const inst = t[Math.floor(Math.random() * t.length)].createInstance(type);
+    const src = t[Math.floor(Math.random() * t.length)];
+    src.setEnabled(true);
+    const inst = src.createInstance(type);
     inst.scaling.set(-1, 1, 1); // glTF sağ əlli → sol əlli güzgü (şablonun __root__ çevrilməsi kimi)
     return inst;
   }

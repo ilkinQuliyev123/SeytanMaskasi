@@ -17,7 +17,7 @@ function flameTex(scene: Scene) {
 export class Dragon implements Target {
   ally = true; hp = 1500; pos: Vector3; yaw = 0; rider = false; private root: TransformNode;
   private wings: Mesh[] = []; private flap = 0; private fire: ParticleSystem; private breathT = 0; private cool = 0; private orbit = 0;
-  vy = 0; private target: Target | null = null; summon: Vector3 | null = null;
+  vy = 0; private target: Target | null = null; summon: Vector3 | null = null; summonOnly = false; private calm = 0;
 
   constructor(private scene: Scene, x: number, z: number) {
     this.pos = new Vector3(x, heightAt(x, z) + 1.8, z);
@@ -50,8 +50,9 @@ export class Dragon implements Target {
     f.minEmitPower = 22; f.maxEmitPower = 30; f.blendMode = ParticleSystem.BLENDMODE_ADD; f.updateSpeed = 0.02;
     f.start(); this.fire = f;
   }
-  get alive() { return this.hp > 0; }
-  hit(d: number) { this.hp = Math.max(0, this.hp - d * 0.5); }
+  private down = false;
+  get alive() { return this.hp > 0 && !this.down; }
+  hit(d: number) { this.hp = Math.max(0, this.hp - d * 0.5); this.calm = 0; }
   get saddle() { return this.pos.add(new Vector3(0, 1.4, 0.4)); }
   get forward() { return new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
 
@@ -70,6 +71,14 @@ export class Dragon implements Target {
 
   /** minilməyəndə: oyunçunun üstündə dövrə vurur, yaxın düşmənə enib alov püskürür */
   update(dt: number, leader: Vector3, foes: Target[], ride?: { fw: number; st: number; up: number; boost: boolean; yaw: number; pitch: number; fire: boolean }) {
+    if ((this.calm += dt) > 8 || this.down) this.hp = Math.min(1500, this.hp + 20 * dt); // döyüşdən kənarda sağalır
+    if (this.hp <= 0) this.down = true;
+    if (this.down) { // yerə enib dincəlir; 300 can yığanda yenidən qalxır
+      if (this.hp >= 300) this.down = false;
+      this.pos.y = Math.max(heightAt(this.pos.x, this.pos.z) + 1.8, this.pos.y - 12 * dt); this.fire.emitRate = 0;
+      this.root.position.copyFrom(this.pos);
+      return;
+    }
     this.flap += dt * (ride || this.pos.y - heightAt(this.pos.x, this.pos.z) > 3 ? 7 : 2);
     this.wings.forEach((w, i) => ((w.parent as TransformNode).rotation.z = (i ? -1 : 1) * Math.sin(this.flap) * 0.6));
     if ((this.breathT -= dt) <= 0) this.fire.emitRate = 0; else this.fire.emitRate = 700;

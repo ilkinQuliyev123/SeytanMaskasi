@@ -41,18 +41,19 @@ export class Player implements Target {
     this.camera = new FreeCamera("cam", new Vector3(0, 5, 0), scene);
     this.camera.minZ = 0.3; this.camera.maxZ = 2400; this.camera.fov = 1.0;
 
-    addEventListener("keydown", (e) => this.key(e, true));
-    addEventListener("keyup", (e) => this.key(e, false));
+    const o = { signal: this.ac.signal };
+    addEventListener("keydown", (e) => this.key(e, true), o);
+    addEventListener("keyup", (e) => this.key(e, false), o);
     canvas.addEventListener("mousemove", (e) => {
       if (document.pointerLockElement !== canvas || this.wheelOpen) return;
       const k = 0.0025 * this.camera.fov; // nişanda həssaslıq azalır
       this.yaw += e.movementX * k;
       this.pitch = Math.max(-0.7, Math.min(0.9, this.pitch + e.movementY * k));
-    });
-    canvas.addEventListener("mousedown", (e) => { if (e.button === 0) this.shooting = true; if (e.button === 2) this.aiming = true; });
-    addEventListener("mouseup", (e) => { if (e.button === 0) this.shooting = false; if (e.button === 2) this.aiming = false; });
-    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-    canvas.addEventListener("wheel", (e) => { this.cur = (this.cur + (e.deltaY > 0 ? 1 : this.guns.length - 1)) % this.guns.length; });
+    }, o);
+    canvas.addEventListener("mousedown", (e) => { if (e.button === 0) this.shooting = true; if (e.button === 2) this.aiming = true; }, o);
+    addEventListener("mouseup", (e) => { if (e.button === 0) this.shooting = false; if (e.button === 2) this.aiming = false; }, o);
+    canvas.addEventListener("contextmenu", (e) => e.preventDefault(), o);
+    canvas.addEventListener("wheel", (e) => { this.cur = (this.cur + (e.deltaY > 0 ? 1 : this.guns.length - 1)) % this.guns.length; }, o);
   }
 
   /** animasiyalı samuray modelinə keç: oni maskalı kabuto başa, silahlar sağ ələ, saat sol qola bağlanır */
@@ -77,6 +78,10 @@ export class Player implements Target {
     this.clip = name;
     for (const [n, g] of Object.entries(this.clips)) if (g) g.weight += ((n === name ? 1 : 0) - g.weight) * Math.min(1, dt * 10);
   }
+  private ac = new AbortController();
+  dispose() { this.ac.abort(); this.keys.clear(); }
+  /** vurma hissi: son atəş kimisə vurdusa true (HUD işarəsi üçün) */
+  hitFlash = 0;
   get alive() { return this.hp > 0; }
   get gun() { return this.guns[this.cur]; }
   /** HUD üçün: 0 adi, 1 nişan, 2 snayper optikası */
@@ -178,6 +183,9 @@ export class Player implements Target {
       cam = this.pos.add(fwd.scale(-back)).add(right.scale(side)).add(new Vector3(0, (scope === 1 ? 1.9 : 2.6) + this.pitch * (scope === 1 ? 1.5 : 4), 0));
       if (f?.id === "qaya") cam = cam.add(fwd.scale(-2)).add(new Vector3(0, 1, 0));
       cam.y = Math.max(cam.y, heightAt(cam.x, cam.z) + 0.8);
+      const head = this.pos.add(new Vector3(0, 1.7, 0)), v = cam.subtract(head), len = v.length();
+      const hit = this.scene.pickWithRay(new Ray(head, v.scale(1 / len), len), (m) => !!m.metadata?.solid, true);
+      if (hit?.hit && hit.pickedPoint) cam = Vector3.Lerp(head, hit.pickedPoint, Math.max(0, (hit.distance - 0.4) / hit.distance));
     }
     this.camera.position.copyFrom(cam);
     const look = new Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), -Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
@@ -237,7 +245,7 @@ export class Player implements Target {
     let spread = g.w.spread * (this.aiming ? (this.crouch ? 0.15 : 0.4) : g.w.id === "sniper" ? 25 : 1);
     if (g.w.id === "sniper" && !this.aiming) spread = Math.max(spread, 0.03);
     const { point, unit } = this.aim(g.w.range, spread);
-    if (unit && !unit.ally) unit.hit(g.w.dmg);
+    if (unit && !unit.ally) { unit.hit(g.w.dmg); this.hitFlash = 0.15; }
     onShot(from, point, !!unit);
     this.lastNoise = g.w.noise;
   }

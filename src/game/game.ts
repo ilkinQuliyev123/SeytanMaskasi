@@ -20,6 +20,8 @@ import { createWheel } from "../ui/wheel";
 import { FORMS } from "./data";
 
 export type { Quality };
+const TEST = location.search.includes("test"); // test: proqram renderində kadr az olur — addım böyük
+let gameTime = 0;
 let lockCanvas: HTMLCanvasElement | null = null;
 /** siçan kilidi — brauzer klik tələb edir; xəta oyunu dayandırmasın */
 function lockSafe() { const p = lockCanvas?.requestPointerLock() as unknown as Promise<void> | undefined; p?.catch?.(() => {}); }
@@ -67,7 +69,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   lockCanvas = canvas;
   const loading = document.createElement("div"); loading.className = "screen loading"; loading.textContent = "Yüklənir…";
   document.getElementById("ui")?.replaceChildren(loading);
-  engine.setHardwareScalingLevel(quality === "low" ? 1.6 : 1.1); // aşağı ölçüdə çək — zəif video kart üçün
+  engine.setHardwareScalingLevel(TEST ? 8 : quality === "low" ? 1.6 : 1.1); // aşağı ölçüdə çək — zəif video kart üçün (test: çox kiçik)
   const scene = new Scene(engine);
   scene.skipPointerMovePicking = true;
   const player = new Player(scene, setup.weapons, canvas);
@@ -134,15 +136,24 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   if (at) for (const a of allies) { a.pos.x += player.pos.x; a.pos.z += player.pos.z - 4; }
   let order: "follow" | "attack" = "follow";
   const dragon = new Dragon(scene, 18, 6); // həyətdə gözləyir
+  let dragonWarn = true;
+  Unit.onDeath = (u) => { // səssiz öldürmədə də yaxındakı 3 yoldaş (25 m) meyitə baxmağa gəlir
+    if (u.ally || u.type.civ) return;
+    enemies.filter((e) => e !== u && e.alive && !e.target && !e.post && Vector3.DistanceSquared(e.pos, u.pos) < 625).slice(0, 3).forEach((e) => (e.alert = u.pos.clone()));
+  };
+  // vurma işarəsi (hit marker): atəş kimisə vuranda nişangahın ətrafında qısa X
+  const hitMark = document.createElement("div");
+  hitMark.style.cssText = "position:fixed;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;pointer-events:none;opacity:0;transition:opacity .08s;z-index:5;background:linear-gradient(45deg,transparent 45%,#fff 45%,#fff 55%,transparent 55%),linear-gradient(-45deg,transparent 45%,#fff 45%,#fff 55%,transparent 55%);-webkit-mask:radial-gradient(circle,transparent 6px,#000 7px);mask:radial-gradient(circle,transparent 6px,#000 7px)";
+  document.body.appendChild(hitMark);
 
   // güllə/ox izləri (hovuz)
   const tracerMat = new StandardMaterial("tr", scene);
   tracerMat.emissiveColor = new Color3(1, 0.8, 0.4); tracerMat.disableLighting = true;
   const tracers: { l: LinesMesh; t: number }[] = [];
   let sfxRef: Sfx | null = null;
-  const shot = (a: Vector3, b: Vector3) => {
+  const shot = (a: Vector3, b: Vector3, _hit?: boolean, kind = "musket") => {
     const d = Vector3.Distance(a, player.pos);
-    if (sfxRef && d > 3 && d < 160 && Math.random() < 0.5) sfxRef.shot("musket", d);
+    if (sfxRef && d > 3 && d < 160 && Math.random() < 0.5) sfxRef.shot((kind === "bow" ? "bow" : "musket"), d);
     let tr = tracers.find((x) => x.t <= 0);
     if (!tr) {
       if (tracers.length > 40) return;
@@ -177,7 +188,12 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   addEventListener("keydown", onWheelKey); addEventListener("keyup", onWheelKey); addEventListener("mousemove", onWheelMove);
   const onKey = (e: KeyboardEvent) => {
     if (e.code === "KeyG" && !paused) { // əjdahaya min / düş
-      if (player.riding) { player.riding = null; dragon.rider = false; player.pos.y = heightAt(player.pos.x, player.pos.z); say("Əjdahadan düşdün", 2); }
+      if (player.riding) {
+        player.riding = null; dragon.rider = false; player.flyH = 0; player.jumpH = 0; player.jumpV = 0;
+        player.pos.x += 4; player.pos.y = heightAt(player.pos.x, player.pos.z); dragon.summon = player.pos.clone(); dragon.summonOnly = true;
+        say("Əjdahadan düşdün", 2);
+      }
+      else if (!dragon.alive) say("Əjdaha yaralıdır, hələ uça bilmir", 2);
       else { dragon.summon = player.pos.clone(); say("Əjdaha gəlir…", 2); }
     }
     if (e.code === "KeyF" && !paused) {
@@ -190,6 +206,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   const lockChange = () => {
     if (document.pointerLockElement !== canvas && !ended && !paused) {
       paused = true;
+      if (wheel.isOpen()) { player.formIdx = wheel.close(); player.wheelOpen = false; }
       pauseMenu(() => { paused = false; hudRebuild(); lockSafe(); }, quit);
     }
   };
@@ -203,11 +220,13 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
 
   scene.onBeforeRenderObservable.add(() => {
     if (paused || ended) return;
-    const dt = Math.min(0.05, engine.getDeltaTime() / 1000) * (wheel.isOpen() ? 0.25 : 1); // çarx açıqkən vaxt yavaşıyır
+    const dt = TEST ? 0.06 : Math.min(0.05, engine.getDeltaTime() / 1000) * (wheel.isOpen() ? 0.25 : 1); // çarx açıqkən vaxt yavaşıyır
+    gameTime += dt;
     frame++;
     sky.update(dt, player.pressed("KeyT"));
     player.update(dt, grid, hittable, shot);
     const pp = player.pos;
+    hitMark.style.opacity = player.hitFlash > 0 ? "1" : "0"; player.hitFlash -= dt;
     // səslər: fon, addımlar, atəş, doldurma, çevrilmə
     if ((ambT -= dt) <= 0) { ambT = 1; sfx.ambience(sky.isNight, sky.weather === "yağış" ? 0.8 : sky.weather === "duman" ? 0.2 : 0.45); }
     const g0 = player.gun, moving = player.pressed("KeyW") || player.pressed("KeyA") || player.pressed("KeyS") || player.pressed("KeyD");
@@ -231,11 +250,13 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     const night = sky.isNight, fog = sky.fog;
     if (player.watch.active?.id === "qalxan") for (const a of allies) if (a.alive && Vector3.Distance(a.pos, pp) < 10) a.hp = Math.min(a.type.hp, a.hp + 12 * dt); // qalxan dəstəni sağaldır
     allies.forEach((u, i) => u.update(dt, { foes: enemies, night, fog, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked }));
+    if (player.riding && !dragon.alive) { player.riding = null; dragon.rider = false; player.flyH = 0; say("Əjdaha yaralandı və yerə endi!", 3); }
+    if (dragon.alive && dragon.hp < 500 && dragonWarn) { dragonWarn = false; say("Əjdaha ağır yaralanıb!", 3); }
     if (!player.riding) {
       dragon.update(dt, pp, hittable);
-      if (dragon.summon && Vector3.Distance(dragon.pos, dragon.summon) < 7) { // endi — min
-        dragon.summon = null; player.riding = dragon; dragon.rider = true;
-        say("Əjdaha: WASD uç · Space/Ctrl qalx/en · Shift sürət · Sol klik alov · G düş", 5);
+      if (dragon.summon && Vector3.Distance(dragon.pos, dragon.summon) < 7) { // endi — min (düşəndə yalnız yanında enir)
+        const only = dragon.summonOnly; dragon.summon = null; dragon.summonOnly = false;
+        if (!only) { player.riding = dragon; dragon.rider = true; say("Əjdaha: WASD uç · Space/Ctrl qalx/en · Shift sürət · Sol klik alov · G düş", 5); }
       }
     }
     const foes: Target[] = [player, ...allies, dragon];
@@ -281,16 +302,18 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     endScreen(won, quit);
   }
   function quit() {
-    removeEventListener("keydown", onKey);
+    removeEventListener("keydown", onKey); Unit.onDeath = null;
     canvas.removeEventListener("pointerdown", unlock); sfx.dispose();
     removeEventListener("keydown", onWheelKey); removeEventListener("keyup", onWheelKey); removeEventListener("mousemove", onWheelMove); wheel.destroy();
     document.removeEventListener("pointerlockchange", lockChange);
     canvas.removeEventListener("click", clickLock);
-    hudRef.destroy();
+    hudRef.destroy(); player.dispose(); hitMark.remove();
     engine.stopRenderLoop();
     scene.dispose();
     onExit();
   }
-  engine.runRenderLoop(() => scene.render());
+  if (TEST) setInterval(() => scene.render(), 60); // test: virtual zamanda rAF işləmir — taymerlə, sabit 0.06 s addım
+  else engine.runRenderLoop(() => scene.render());
+  if (location.search.includes("test")) (window as unknown as { __game: unknown }).__game = { player, dragon, enemies, allies, grid, forts, state: () => ({ paused, ended, time: gameTime }) };
   lockSafe();
 }

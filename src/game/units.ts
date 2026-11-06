@@ -13,7 +13,7 @@ export interface Target { pos: Vector3; alive: boolean; hit(dmg: number): void; 
 export type Post = { y: number; face: number };
 export type Ctx = {
   foes: Target[]; night: boolean; fog: number; leader: Vector3; order: "follow" | "attack"; grid: Grid; mates: Unit[];
-  onShot: (from: Vector3, to: Vector3, hit: boolean) => void; slot: number; blocked?: (a: Vector3, b: Vector3) => boolean;
+  onShot: (from: Vector3, to: Vector3, hit: boolean, kind?: string) => void; slot: number; blocked?: (a: Vector3, b: Vector3) => boolean;
 };
 
 const bases = new Map<string, Mesh>();
@@ -27,6 +27,8 @@ function baseMesh(scene: Scene, t: UnitType) {
 }
 
 export class Unit implements Target {
+  /** ölüm xəbəri (oyun: yaxındakı yoldaşlar meyitə baxmağa gəlir) */
+  static onDeath: ((u: Unit) => void) | null = null;
   mesh: InstancedMesh; hp: number; gun: Gun; facing = 0; target: Target | null = null;
   alert: Vector3 | null = null; fort = ""; route: { x: number; z: number }[] | null = null; private ri = 0; private dir = 1;
   stun = 0; acc = 0; dist = 0; private blk = false; // acc/dist — oyun dövrəsi üçün (uzaqdakılar seyrək yenilənir)
@@ -52,6 +54,7 @@ export class Unit implements Target {
     if (!this.alive) return;
     this.hp -= dmg;
     if (this.hp <= 0) {
+      Unit.onDeath?.(this);
       if (this.anim) this.setAnim("dead"); else { this.mesh.rotation.x = -Math.PI / 2; this.mesh.position.y += 0.3; }
       this.mesh.isPickable = false;
       if (this.far) { this.far.rotation.x = -Math.PI / 2; this.far.position.y += 0.3; this.far.isPickable = false; }
@@ -124,10 +127,14 @@ export class Unit implements Target {
         this.shotT = 0.7;
         const hit = Math.random() < hitChance(w, d);
         if (hit) this.target.hit(w.dmg * (0.8 + Math.random() * 0.4));
-        if (!w.melee) ctx.onShot(this.pos.add(new Vector3(0, 1.5, 0)), this.target.pos.add(new Vector3(0, 1.2, 0)), hit);
+        if (!w.melee) ctx.onShot(this.pos.add(new Vector3(0, 1.5, 0)), this.target.pos.add(new Vector3(0, 1.2, 0)), hit, w.id);
       }
     } else if (this.ally) {
       const ring = Math.floor(ctx.slot / 12), ang = ((ctx.slot % 12) / 12) * Math.PI * 2 + ring * 0.3, rr = 4 + ring * 2.5; // dəstə halqalarla izləyir
+      if (ctx.order === "attack" && this.alert && Math.hypot(this.alert.x - this.pos.x, this.alert.z - this.pos.z) < 6) this.alert = null;
+      if (ctx.order === "attack" && !this.alert && (this.think > 0.2)) { // növbəti hədəf: ən yaxın canlı düşmən (200 m)
+        let bd = 40000; for (const f of ctx.foes) { if (!f.alive) continue; const d = (f.pos.x - this.pos.x) ** 2 + (f.pos.z - this.pos.z) ** 2; if (d < bd) { bd = d; this.alert = f.pos.clone(); } }
+      }
       goal = ctx.order === "follow" ? ctx.leader.add(new Vector3(Math.cos(ang) * rr, 0, Math.sin(ang) * rr)) : this.alert;
       const far = goal ? Vector3.Distance(goal, this.pos) : 0;
       speed = this.type.speed * (far > 40 ? 2 : far > 10 ? 1.3 : 0.7); // geri qalanda tələsir
