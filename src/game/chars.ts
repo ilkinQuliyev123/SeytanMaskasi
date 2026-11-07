@@ -96,6 +96,8 @@ export class CharLib {
     return { inst: e.inst, dur };
   }
   /** hovuzda iş qurtardısa şablonu söndür */
+  /** bütün skeletli şablonlar (instance-lar onlarla birlikdə çəkilir) — kölgə siyahısı üçün */
+  allTemplates(): Mesh[] { return [...[...this.templates.values()].flat(), ...[...this.dyingPool.values()].flat().map((p) => p.m)]; }
   tickDying(now: number) { for (const [, pool] of this.dyingPool) for (const p of pool) if (p.until <= now && (!p.inst || p.inst.isDisposed()) && p.m.isEnabled()) { p.m.setEnabled(false); p.ag.stop(); } }
 
   /** döyüşçü üçün instance: (növ, hal) şablonundan; 2 faza — addımlar sinxron görünməsin */

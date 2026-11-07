@@ -2,6 +2,7 @@
 // Kənddəki kazarmadan 100 türk əsgəri ilə çıx, 10 səngər xəttini sahilə qədər təmizlə (quruda 3 kazarma — 300 düşmən).
 // Dənizdə 9 gəmi (hər birində 50 dənizçi) sahilə atəş açır. Təpələrdəki 6 topla (ən hündürdə böyük sahil topu) onları batır:
 // toplar yanında əsgər olanda özü atır; oyunçu E ilə topa keçib özü nişan ala bilər.
+import { ColorCurves, DirectionalLight, HemisphericLight, ShadowGenerator, VertexBuffer } from "@babylonjs/core";
 import { Color3, Color4, DefaultRenderingPipeline, DynamicTexture, Engine, GlowLayer, ImageProcessingConfiguration, Mesh, MeshBuilder, ParticleSystem,
   PointLight, Ray, Scene, StandardMaterial, TransformNode, Vector3, type InstancedMesh, type LinesMesh } from "@babylonjs/core";
 import { UNITS, type ArmySetup, type GameMap } from "./data";
@@ -51,6 +52,17 @@ class Fx {
   boom(at: Vector3, big = 1) { this.emit(this.fire, at, 30 * big); this.emit(this.smoke, at, 14 * big); this.emit(this.dirt, at, 35 * big); }
   water(at: Vector3, big = 1) { this.emit(this.splash, new Vector3(at.x, 0.3, at.z), 70 * big); }
   muzzle(at: Vector3) { this.emit(this.fire, at, 10); this.emit(this.smoke, at, 6); }
+  private puffs!: ParticleSystem;
+  /** kiçik effektlər: toz (güllə yerə dəyəndə), ağız alovu */
+  initSmall(scene: Scene) {
+    const p = (this.puffs = new ParticleSystem("fxPuff", 120, scene));
+    p.particleTexture = puff(scene, "fxPuffT", "rgba(255,255,255,1)", "rgba(255,255,255,0)"); p.emitter = Vector3.Zero(); p.emitRate = 0;
+    p.color1 = new Color4(0.45, 0.38, 0.3, 0.7); p.color2 = new Color4(0.35, 0.3, 0.24, 0.6); p.colorDead = new Color4(0.4, 0.36, 0.3, 0);
+    p.minSize = 0.4; p.maxSize = 1.2; p.minLifeTime = 0.5; p.maxLifeTime = 1.1; p.minEmitPower = 1; p.maxEmitPower = 3;
+    p.direction1 = new Vector3(-0.5, 1, -0.5); p.direction2 = new Vector3(0.5, 1.6, 0.5); p.gravity = new Vector3(0, -3, 0); p.start();
+  }
+  dust(at: Vector3) { this.emit(this.puffs, at, 4); }
+  flash(at: Vector3) { this.emit(this.fire, at, 2); }
 }
 
 // --- gəmi: 1919 tipli zirehli gəmi (orijinal low-poly model) ---
@@ -183,19 +195,47 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   }
   halo.renderingGroupId = 0; sunDisc.renderingGroupId = 0;
   const sunDir = new Vector3(1, 0, 0.3).normalize();
+  // sübh səması: vertex rəngli günbəz — üfüqdə isti narıncı, yuxarıda dərin mavi, günəş tərəfdə parlaq (1 çəkiliş, ~1000 üçbucaq)
+  { const old = scene.meshes.find((m) => m.name === "dome" && m.infiniteDistance); if (old) old.isVisible = false; // ulduzlar sübhdə lazım deyil
+    const d = MeshBuilder.CreateSphere("dawnSky", { diameter: 10000, segments: 24, sideOrientation: Mesh.BACKSIDE }, scene);
+    const pos = d.getVerticesData(VertexBuffer.PositionKind)!, col: number[] = [];
+    const zen = new Color3(0.13, 0.24, 0.47), mid = new Color3(0.5, 0.52, 0.66), hor = new Color3(0.96, 0.6, 0.4), sunC = new Color3(1, 0.8, 0.5), below = new Color3(0.32, 0.33, 0.4), west = new Color3(0.62, 0.5, 0.6);
+    for (let i = 0; i < pos.length; i += 3) {
+      const v = new Vector3(pos[i], pos[i + 1], pos[i + 2]).normalize(), e = v.y, s = Vector3.Dot(v, sunDir);
+      const h = Color3.Lerp(west, hor, (s + 1) / 2); // günəşin əks tərəfi — çəhrayı-boz
+      let c = e < 0 ? Color3.Lerp(h.scale(0.85), below, Math.min(1, -e * 4)) : Color3.Lerp(Color3.Lerp(h, mid, Math.min(1, Math.pow(e / 0.35, 0.7))), zen, Math.min(1, Math.pow(Math.max(0, e - 0.1) / 0.6, 0.8)));
+      c = Color3.Lerp(c, sunC, Math.pow(Math.max(0, s), 10) * Math.max(0, 1 - Math.abs(e) * 2.5) * 0.85);
+      col.push(c.r, c.g, c.b, 1);
+    }
+    d.setVerticesData(VertexBuffer.ColorKind, col);
+    const m = new StandardMaterial("dawnSkyM", scene); m.disableLighting = true; m.diffuseColor = Color3.Black(); m.emissiveColor = Color3.White(); m.specularColor = Color3.Black(); m.fogEnabled = false; m.freeze(); // rəng = nöqtə rəngi
+    d.material = m; d.infiniteDistance = true; d.isPickable = false; }
+  const sunL = scene.getLightByName("sun") as DirectionalLight, ambL = scene.getLightByName("amb") as HemisphericLight;
+  const HAZE = new Color3(0.62, 0.52, 0.5);
 
   // görünüş
-  const pipe = new DefaultRenderingPipeline("fx", true, scene, [player.camera]);
-  pipe.fxaaEnabled = true; pipe.imageProcessingEnabled = true;
-  pipe.imageProcessing.toneMappingEnabled = true; pipe.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-  pipe.imageProcessing.contrast = 1.2; pipe.imageProcessing.exposure = 1.45;
-  pipe.imageProcessing.vignetteEnabled = true; pipe.imageProcessing.vignetteWeight = 2.2;
-  pipe.bloomEnabled = !low; pipe.bloomThreshold = 0.65; pipe.bloomWeight = 0.5;
-  pipe.sharpenEnabled = !low; pipe.sharpen.edgeAmount = 0.3; // zəif kartda kəskinlik və dənə söndürülür (hər biri tam ekran keçidi)
-  pipe.grainEnabled = !low; pipe.grain.intensity = 5; pipe.grain.animated = true;
+  // rəng: ACES kino tonu + rəng tonlaması (işıqlar isti, kölgələr soyuq). Zəif kartda bunlar materialların öz şeyderində işləyir —
+  // əlavə tam ekran keçidi yoxdur (pulsuz). «Orta»da ayrıca boru: FXAA, bloom, kəskinlik.
+  const cc = new ColorCurves(); cc.globalSaturation = -8; cc.highlightsHue = 35; cc.highlightsDensity = 22; cc.highlightsSaturation = 10; cc.shadowsHue = 215; cc.shadowsDensity = 30; cc.shadowsSaturation = 15;
+  const ip = scene.imageProcessingConfiguration;
+  ip.toneMappingEnabled = true; ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES; ip.contrast = 1.12; ip.exposure = 1.3;
+  ip.colorCurvesEnabled = true; ip.colorCurves = cc; ip.vignetteEnabled = !low; ip.vignetteWeight = 2;
+  if (!low) {
+    const pipe = new DefaultRenderingPipeline("fx", true, scene, [player.camera]);
+    pipe.fxaaEnabled = true; pipe.bloomEnabled = true; pipe.bloomThreshold = 0.65; pipe.bloomWeight = 0.5;
+    pipe.sharpenEnabled = true; pipe.sharpen.edgeAmount = 0.3;
+  }
   if (!low) new GlowLayer("glow", scene, { blurKernelSize: 32 }).intensity = 0.6;
   const lamp = new PointLight("lamp", Vector3.Zero(), scene); lamp.diffuse = new Color3(1, 0.62, 0.3); lamp.specular = Color3.Black(); lamp.intensity = 1.2; lamp.range = 22;
-  const fx = new Fx(scene, low);
+  const fx = new Fx(scene, low); fx.initSmall(scene);
+  if (!low) { // sübh dumanı (yalnız «orta»): yerə yaxın, iri, çox şəffaf təbəqələr (az hissəcik — zəif kartda doldurma xərci az olsun)
+    const m = new ParticleSystem("haze", low ? 12 : 24, scene);
+    m.particleTexture = puff(scene, "hazeT", "rgba(255,255,255,1)", "rgba(255,255,255,0)"); m.emitter = player.camera.position;
+    m.minEmitBox = new Vector3(-180, -8, -180); m.maxEmitBox = new Vector3(180, -2, 180);
+    m.direction1 = new Vector3(-0.4, 0, -0.2); m.direction2 = new Vector3(0.4, 0.02, 0.2); m.minEmitPower = 0.2; m.maxEmitPower = 0.6;
+    m.minSize = 50; m.maxSize = 90; m.minLifeTime = 30; m.maxLifeTime = 45; m.emitRate = low ? 0.4 : 0.8;
+    m.color1 = new Color4(0.95, 0.78, 0.66, 0.06); m.color2 = new Color4(0.85, 0.75, 0.75, 0.045); m.colorDead = new Color4(0.9, 0.8, 0.75, 0);
+    m.preWarmCycles = 300; m.start(); }
 
   // --- ordular ---
   const nAllies = setup.soldiers ?? 100, nEnemy = setup.enemies || 300;
@@ -225,6 +265,19 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     }
   });
   const landTotal = enemies.length;
+  // kölgələr: yalnız oyunçunun ətrafında (80×80 m), alçaq sübh günəşindən uzun kölgələr. Zəif kartda 1024, aşağı filtr.
+  const shadow = low ? null : (() => {
+  sky.shadows?.dispose();
+  const shadow = new ShadowGenerator(low ? 1024 : 2048, sunL);
+  shadow.usePercentageCloserFiltering = true; shadow.filteringQuality = low ? ShadowGenerator.QUALITY_LOW : ShadowGenerator.QUALITY_MEDIUM;
+  shadow.bias = 0.004; shadow.normalBias = 0.02; shadow.darkness = 0.25;
+  sunL.autoUpdateExtends = false; sunL.autoCalcShadowZBounds = false;
+  sunL.orthoLeft = -40; sunL.orthoRight = 40; sunL.orthoTop = 40; sunL.orthoBottom = -40; sunL.shadowMinZ = 1; sunL.shadowMaxZ = 400;
+  for (const m of lib?.allTemplates() ?? []) shadow.addShadowCaster(m, false);
+  for (const m of scene.meshes) if (m.name.startsWith("P_") || m.name.startsWith("gun") || m.name.startsWith("village") || m.name.startsWith("enemyBarracks") || m.name === "sandbags") shadow.addShadowCaster(m, false);
+  for (const n of ["ground", "trench_vc", "trench_dirt"]) { const g = scene.getMeshByName(n); if (g) g.receiveShadows = true; }
+  for (const m of scene.meshes) if (m.name.startsWith("village") || m.name.startsWith("trench") || m.name === "sandbags") m.receiveShadows = true;
+  return shadow; })();
   // donanma: 9 gəmi sahildən 250–500 m aralıda, sahilə paralel
   const shipBase = shipModel(scene), smokeTex = puff(scene, "shipSmokeT", "rgba(255,255,255,1)", "rgba(255,255,255,0)");
   const ships = Array.from({ length: 9 }, (_, i) => new Ship(scene, shipBase, new Vector3(COAST + 230 + Math.floor(i / 3) * 125 + Math.random() * 20, 0, -200 + (i % 3) * 200 + (Math.random() - 0.5) * 30), (i % 2 ? Math.PI : 0) + (Math.random() - 0.5) * 0.2, smokeTex, low));
@@ -282,6 +335,8 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     if (!tr) { if (tracers.length > 50) return; tr = { l: MeshBuilder.CreateLines("t", { points: [a, b], updatable: true }, scene), t: 0 }; tr.l.color = new Color3(1, 0.85, 0.5); tr.l.isPickable = false; tracers.push(tr); }
     else MeshBuilder.CreateLines("t", { points: [a, b], instance: tr.l });
     tr.t = 0.06; tr.l.isVisible = true;
+    if (d < 90) fx.flash(a); // tüfəng ağzında alov
+    if (!_hit && Vector3.Distance(b, player.pos) < 70) fx.dust(b); // yerə dəyən güllə — toz
   };
   const blocked = (a: Vector3, b: Vector3) => { const d = b.subtract(a), len = d.length(); return !!scene.pickWithRay(new Ray(a, d.scaleInPlace(1 / len), len), (m) => !!m.metadata?.solid, true)?.hit; };
 
@@ -351,6 +406,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     if (player.shooting && document.pointerLockElement === canvas && g.cool <= 0) { g.cool = g.reload * 0.6; fire(g.muzzle, lob(g.muzzle, aim, T), g.big ? 140 : 90, g.big ? 9 : 6, false, g.big, null); }
   };
   let resT = 2; const minScale = low ? 1 : 0.9;
+  const NEAR = low ? 10 : 24, NEAR_R = low ? 40 : 70;
   scene.autoClear = false; // səma günbəzi hər yeri örtür
 
   scene.onBeforeRenderObservable.add(() => {
@@ -364,8 +420,13 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     hitMark.style.opacity = player.hitFlash > 0 ? "1" : "0"; player.hitFlash -= dt;
     // günəş: kameradan 5200 m, sahil istiqamətində; yavaş qalxır
     const rise = 20 + (sky.hour - 6.05) * 900;
-    sunDisc.position.copyFrom(player.camera.position.add(sunDir.scale(5200))); sunDisc.position.y = rise;
-    halo.position.copyFrom(player.camera.position.add(sunDir.scale(5300))); halo.position.y = rise + 40;
+    sunDisc.position.copyFrom(player.camera.position.add(sunDir.scale(4500))); sunDisc.position.y = rise * 0.87;
+    halo.position.copyFrom(player.camera.position.add(sunDir.scale(4600))); halo.position.y = rise * 0.87 + 35;
+    // sübh işığı: isti alçaq günəş, soyuq mavi ətraf işıq, üfüq rəngində duman (Sky-ın ümumi dəyərlərinin üstündən)
+    if (shadow) sunL.position.copyFrom(player.pos.subtract(sunL.direction.scale(200))); // kölgə sahəsi oyunçunu izləyir
+    sunL.diffuse.set(1, 0.74, 0.52); sunL.intensity = 2.1; sunL.direction.set(-sunDir.x, -0.16, -sunDir.z);
+    ambL.diffuse.set(0.55, 0.62, 0.82); ambL.groundColor.set(0.32, 0.26, 0.2); ambL.intensity = 0.95;
+    scene.fogColor.copyFrom(HAZE); scene.fogDensity = 0.001;
     sea.tex.uOffset += dt * 0.004; sea.tex.vOffset += dt * 0.0025;
     // səslər
     if ((ambT -= dt) <= 0) { ambT = 1; sfx.ambience(false, 0.5); }
@@ -378,8 +439,12 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
 
     if ((slowT -= dt) <= 0) {
       slowT = 0.5;
-      for (const e of enemies) { e.dist = Math.hypot(e.pos.x - pp.x, e.pos.z - pp.z); e.setLod(e.dist < 90, e.dist < 520); }
-      for (const a of allies) a.setLod(Math.hypot(a.pos.x - pp.x, a.pos.z - pp.z) < 90, true);
+      // animasiyalı model (≈25 min təpə) yalnız ən yaxın ${NEAR} əsgərdə; qalanları sadə model (≈300 təpə)
+      for (const e of enemies) e.dist = Math.hypot(e.pos.x - pp.x, e.pos.z - pp.z);
+      for (const a of allies) a.dist = Math.hypot(a.pos.x - pp.x, a.pos.z - pp.z);
+      const near = new Set([...allies, ...enemies].filter((u) => u.alive && u.dist < NEAR_R).sort((a, b) => a.dist - b.dist).slice(0, NEAR));
+      for (const e of enemies) e.setLod(near.has(e), e.dist < 520);
+      for (const a of allies) a.setLod(near.has(a), a.dist < 450);
       lib?.tick(); lib?.tickDying(performance.now() / 1000);
       anchors.sort((a, b) => Vector3.DistanceSquared(a, pp) - Vector3.DistanceSquared(b, pp)); if (anchors[0]) lamp.position.copyFrom(anchors[0]);
       if (!battle && (pp.x > TRENCH_X[0] - 150 || enemies.some((e) => e.alive && e.target))) { battle = true; say("Döyüş başladı! Toplara heyət göndər (G) — gəmiləri vursunlar.", 4); }
@@ -449,7 +514,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     if ((!landLeft && !crewLeft) || !player.alive) return finish(player.alive);
     if (!TEST && (resT -= dt) <= 0) { // FPS-ə görə ekran ölçüsü: zəif anda kiçilir, güc çatanda böyüyür
       resT = 1; const f = engine.getFps(); let sc = engine.getHardwareScalingLevel();
-      if (f < 42 && sc < 2.4) sc += 0.15; else if (f > 57 && sc > minScale) sc = Math.max(minScale, sc - 0.05);
+      if (f < 54 && sc < 2.6) sc = Math.min(2.6, sc + (f < 35 ? 0.3 : 0.12)); else if (f > 59 && sc > minScale) sc = Math.max(minScale, sc - 0.04);
       engine.setHardwareScalingLevel(sc);
     }
     if ((hudT -= dt) <= 0) {

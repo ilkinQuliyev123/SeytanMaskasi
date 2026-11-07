@@ -76,7 +76,7 @@ export const kurtulusGrass = (x: number, z: number) => (ridgeAt(x, z) > 2.5 && !
 export interface Post { x: number; z: number; trench: number }
 export function buildKurtulus(scene: Scene, quality: Quality) {
   const grid = new Grid(), anchors: Vector3[] = [], r0 = rng(7);
-  const sx = quality === "mid" ? 540 : 420, sz = quality === "mid" ? 250 : 190;
+  const sx = quality === "mid" ? 540 : 360, sz = quality === "mid" ? 250 : 160;
   const ground = MeshBuilder.CreateGround("ground", { width: G0.x1 - G0.x0, height: G0.z1 - G0.z0, subdivisionsX: sx, subdivisionsY: sz, updatable: true }, scene);
   ground.position.set((G0.x0 + G0.x1) / 2, 0, (G0.z0 + G0.z1) / 2);
   const pos = ground.getVerticesData(VertexBuffer.PositionKind)!, col: number[] = [];
@@ -339,22 +339,22 @@ function buildVegetation(scene: Scene, quality: Quality) {
     FLAT.slice(1).some((f) => Math.hypot(x - f.x, z - f.z) < f.r - 5) || (x > C.x0 - 120 && x < C.x1 + 5 && Math.abs(z) < 290) ||
     HILLS.some((h) => Math.hypot(x - h.x, z - h.z) < (h.big ? 16 : 9)) || (Math.abs(z) < 12 && x < TRENCH_X[0]);
   const hillW = (x: number, z: number) => ridgeAt(x, z) / 8 + HILLS.reduce((a, h) => a + Math.exp(-((x - h.x) ** 2 + (z - h.z) ** 2) / (2 * h.s * h.s)), 0);
-  for (let i = 0, n = 0; i < 90000 && n < 8000 * q; i++) { // ot: səngərlər arası təpələrdə sıx
+  for (let i = 0, n = 0; i < 90000 && n < (q > 1 ? 9000 : 3500); i++) { // ot: səngərlər arası təpələrdə sıx
     const x = TRENCH_X[0] + r() * (TRENCH_X[9] - TRENCH_X[0]), z = (r() - 0.5) * 2 * VALLEY;
     if (blocked(x, z) || ridgeAt(x, z) < 2.2) continue;
     const s = 0.8 + r() * 0.5; grass.push(M(x, heightAt(x, z) - 0.1, z, s, r() * 6, s * (0.85 + r() * 0.35))); n++;
   }
-  for (let i = 0, n = 0; i < 20000 && n < 1500 * q; i++) { // otlağın biçilməmiş zolaqları
+  for (let i = 0, n = 0; i < 20000 && n < (q > 1 ? 1800 : 700); i++) { // otlağın biçilməmiş zolaqları
     const x = MEADOW.x0 + r() * (MEADOW.x1 - MEADOW.x0), z = (r() - 0.5) * 2 * (VALLEY - 20);
     if (!kurtulusGrass(x, z) || blocked(x, z)) continue;
     const s = 0.75 + r() * 0.4; grass.push(M(x, heightAt(x, z) - 0.1, z, s, r() * 6, s)); n++;
   }
-  for (const h of HILLS) for (let i = 0, n = 0; i < 4000 && n < 380 * q; i++) {
+  for (const h of HILLS) for (let i = 0, n = 0; i < 4000 && n < (q > 1 ? 450 : 180); i++) {
     const a = r() * Math.PI * 2, d = (0.25 + r() * 1.1) * h.s, x = h.x + Math.sin(a) * d, z = h.z + Math.cos(a) * d;
     if (blocked(x, z)) continue;
     const s = 0.8 + r() * 0.5; grass.push(M(x, heightAt(x, z) - 0.1, z, s, r() * 6, s)); n++;
   }
-  for (let i = 0, n = 0; i < 60000 && n < 1500 * q; i++) { // ağaclar: təpələrdə, dağ yamaclarında; döyüş sahəsində seyrək
+  for (let i = 0, n = 0; i < 60000 && n < (q > 1 ? 2000 : 900); i++) { // ağaclar: təpələrdə, dağ yamaclarında; döyüş sahəsində seyrək
     const x = AREA.x0 + r() * (COAST - 40 - AREA.x0), z = (r() - 0.5) * 2 * 560;
     if (blocked(x, z)) continue;
     const slopeZone = Math.abs(z) > VALLEY - 10, w = hillW(x, z), h = heightAt(x, z);
@@ -362,7 +362,7 @@ function buildVegetation(scene: Scene, quality: Quality) {
     const s = 0.8 + r() * 0.6, t = slopeZone ? (r() < 0.7 ? 2 : 0) : w > 0.5 ? (r() < 0.6 ? 0 : 2) : r() < 0.4 ? 1 : 0;
     trees[t].push(M(x, h - 0.3, z, s, r() * 6, s * (0.9 + r() * 0.3))); n++;
   }
-  for (let i = 0, n = 0; i < 60000 && n < 2200 * q; i++) {
+  for (let i = 0, n = 0; i < 60000 && n < (q > 1 ? 2600 : 1100); i++) {
     const x = AREA.x0 + r() * (COAST - 40 - AREA.x0), z = (r() - 0.5) * 2 * (VALLEY + 60);
     if (blocked(x, z) || r() > 0.12 + hillW(x, z)) continue;
     const s = 0.7 + r() * 0.8; bushes.push(M(x, heightAt(x, z) - 0.2, z, s, r() * 6, s)); n++;
