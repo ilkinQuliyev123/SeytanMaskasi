@@ -47,6 +47,7 @@ function roadOf(scene: Scene, st: Site) {
 
 export function buildWorld(scene: Scene, quality: Quality) {
   const grid = new Grid(), anchors: Vector3[] = [];
+  setGrassFn(null);
   // relyef — vertex rəngləri: meşə torpağı, qaya, qəsr ətrafı torpaq, saray həyəti
   const ground = MeshBuilder.CreateGround("ground", { width: HALF * 2, height: HALF * 2, subdivisions: 256, updatable: true }, scene);
   const pos = ground.getVerticesData(VertexBuffer.PositionKind)!, col: number[] = [];
@@ -128,7 +129,11 @@ function buildForest(scene: Scene, quality: Quality) {
 }
 
 /** 2 m hündür sıx ot zolağı: çarpaz kartlar + prosedur ot toxuması (alfa), külək ilə yellənir */
-export const inTallGrass = (x: number, z: number) => { const { s, lat } = roadCoords(SITES[0], x, z); return s > NORTH.hay[0] && s < NORTH.hay[1] && Math.abs(lat) > 4 && Math.abs(lat) < NORTH.halfW * 1.6; };
+const palaceGrass = (x: number, z: number) => { const { s, lat } = roadCoords(SITES[0], x, z); return s > NORTH.hay[0] && s < NORTH.hay[1] && Math.abs(lat) > 4 && Math.abs(lat) < NORTH.halfW * 1.6; };
+let grassFn = palaceGrass;
+/** hündür otun içindədirmi (hər xəritə özününkünü qoyur) */
+export const setGrassFn = (f: ((x: number, z: number) => boolean) | null) => (grassFn = f ?? palaceGrass);
+export const inTallGrass = (x: number, z: number) => grassFn(x, z);
 function tallGrass(scene: Scene) {
   const t = new DynamicTexture("grassTex", { width: 256, height: 256 }, scene, true), c = t.getContext() as CanvasRenderingContext2D, r = rng(4);
   c.clearRect(0, 0, 256, 256);

@@ -1,5 +1,5 @@
 import { T } from "../i18n/az";
-import { UNITS, WEAPONS, PLAYER_WEAPONS, type GameMap, type ArmySetup } from "../game/data";
+import { KURTULUS_WEAPONS, UNITS, WEAPONS, PLAYER_WEAPONS, type GameMap, type ArmySetup } from "../game/data";
 
 const root = () => document.getElementById("ui")!;
 
@@ -91,6 +91,19 @@ export function setupMenu(map: GameMap, st: ArmySetup, onStart: (s: ArmySetup) =
     return sel;
   };
 
+  if (map.id === "kurtulus") { // Qurtuluş Savaşı: türk əsgərləri, quruda düşmən; silahlar — snayper + M16
+    const so = range("Türk əsgəri (sənin dəstən)", 10, 200, st.soldiers ?? 100, 10);
+    const en = range("Quruda düşmən (3 kazarma)", 60, 600, 300, 30);
+    p = el("div", "col", "", panel);
+    el("label", "", T.myWeapons, p);
+    const wl = el("div", "wlist", "", p);
+    KURTULUS_WEAPONS.forEach((id, i) => { const d = el("div", "", "", wl); el("b", "", String(i + 1), d); d.append(WEAPONS[id].name); });
+    el("label", "", "Dəniz: 9 gəmi × 50 dənizçi. Təpələrdə 6 top (ən hündür təpədə böyük top).", p);
+    const row = el("div", "row", "", s);
+    btn(T.start, () => onStart({ ...st, soldiers: +so.value, enemies: +en.value, weapons: [...KURTULUS_WEAPONS] }), row, "go");
+    btn(T.back, onBack, row, "ghost");
+    return;
+  }
   const sam = range(T.samurai, 0, 50, st.samurai);
   const nin = range(T.ninja, 0, 50, st.ninja);
   const sw = select(T.samuraiWeapon, UNITS.samurai.weapons, st.samuraiWeapon);
@@ -133,7 +146,7 @@ export interface HudState {
   forts: { cleared: number; total: number }; scope: 0 | 1 | 2;
 }
 
-export function createHud(): { update(s: HudState): void; destroy(): void } {
+export function createHud(fortLabel: string = T.forts): { update(s: HudState): void; destroy(): void } {
   const r = root();
   r.innerHTML = "";
   const h = el("div", "hud", "", r);
@@ -146,7 +159,7 @@ export function createHud(): { update(s: HudState): void; destroy(): void } {
     el("span", "", label, d);
     return el("b", "", "", d);
   };
-  const trE = stat(ICON.enemy, T.enemy), trS = stat(ICON.squad, T.squad), trF = stat(ICON.fort, T.forts);
+  const trE = stat(ICON.enemy, T.enemy), trS = stat(ICON.squad, T.squad), trF = stat(ICON.fort, fortLabel);
   const bl = el("div", "bl glass", "", h);
   const hpt = el("div", "hpt", "", bl);
   el("span", "", T.hp, hpt);

@@ -24,6 +24,8 @@ export class Player implements Target {
   moto: Moto | null = null;
   /** E: oyun minmə/düşməni yoxlayır; true qaytarsa saat çevrilməsi işləmir */
   interact: (() => boolean) | null = null;
+  /** oyun meydanının sərhədi (çıxmaq olmur) */
+  bounds = { x0: -(HALF - 30), x1: HALF - 30, z0: -(HALF - 30), z1: HALF - 30 }; atBorder = false;
   wheelOpen = false; flyH = 0; private forms: Record<string, Mesh> = {}; private flash: Mesh; private flashT = 0;
   private dome: Mesh; private dial: Mesh; private wasForm = "";
 
@@ -62,12 +64,12 @@ export class Player implements Target {
   }
 
   /** animasiyalı samuray modelinə keç: oni maskalı kabuto başa, silahlar sağ ələ, saat sol qola bağlanır */
-  useChar(lib: CharLib) {
-    const c = lib.player({ outfit: "Male_Ranger", tint: "#2a1416" });
+  useChar(lib: CharLib, look: { tint: string; head: (k: Kit) => unknown } = { tint: "#2a1416", head: hat.kabuto }) {
+    const c = lib.player({ outfit: "Male_Ranger", tint: look.tint });
     this.rig = new TransformNode("rig", this.scene);
     c.root.parent = this.rig;
     const attach = (m: Mesh, node: TransformNode, off: Vector3) => { m.parent = null; m.position.copyFrom(node.getAbsolutePosition().add(off)); m.rotation.setAll(0); m.setParent(node); };
-    const k = new Kit(this.scene); hat.kabuto(k);
+    const k = new Kit(this.scene); look.head(k);
     attach(k.build("pHelmet", vcMat(this.scene, "vcArmor", 0.25)), c.head, new Vector3(0, 0.1, 0));
     for (const g of this.gunMeshes) { g.rotation.setAll(0); attach(g, c.hand, new Vector3(0, 0, 0.05)); this.gunBase.push(g.position.clone()); }
     this.hand = c.hand;
@@ -139,8 +141,9 @@ export class Player implements Target {
       const dx = this.pos.x - o.x, dz = this.pos.z - o.z, d = Math.hypot(dx, dz), r = o.r + 0.6;
       if (d < r && d > 1e-4) { this.pos.x = o.x + (dx / d) * r; this.pos.z = o.z + (dz / d) * r; }
     }
-    const lim = HALF - 30;
-    this.pos.x = Math.max(-lim, Math.min(lim, this.pos.x)); this.pos.z = Math.max(-lim, Math.min(lim, this.pos.z));
+    const B = this.bounds;
+    this.atBorder = this.pos.x < B.x0 || this.pos.x > B.x1 || this.pos.z < B.z0 || this.pos.z > B.z1;
+    this.pos.x = Math.max(B.x0, Math.min(B.x1, this.pos.x)); this.pos.z = Math.max(B.z0, Math.min(B.z1, this.pos.z));
     this.pos.y = heightAt(this.pos.x, this.pos.z) + this.flyH + this.jumpH;
     // görünüş
     const sc = f?.id === "qaya" ? 1.5 : f?.id === "kicik" ? 0.4 : this.crouch ? 0.75 : 1, scope = this.scope;

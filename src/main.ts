@@ -3,6 +3,7 @@ import { Engine } from "@babylonjs/core";
 import { DEFAULT_SETUP, MAPS, type ArmySetup } from "./game/data";
 import { runGame, type Quality } from "./game/game";
 import { mainMenu, mapsMenu, setupMenu } from "./ui/ui";
+import { runKurtulus } from "./game/kurtulus";
 
 const canvas = document.getElementById("c") as HTMLCanvasElement;
 const engine = new Engine(canvas, false, { powerPreference: "high-performance", stencil: true }, false);
@@ -15,11 +16,20 @@ let setup: ArmySetup = { ...DEFAULT_SETUP };
 function home() {
   mainMenu(() => mapsMenu(MAPS, (m) => setupMenu(m, setup, (s) => {
     setup = s;
-    runGame(engine, canvas, m, s, quality, home);
+    if (m.id === "kurtulus") runKurtulus(engine, canvas, m, s, quality, home);
+    else runGame(engine, canvas, m, s, quality, home);
   }, home), home));
 }
 // test rejimi (?auto): menyusuz başla, xəta/FPS-i səhifə başlığına yaz (avtomatik yoxlama üçün)
-if (new URLSearchParams(location.search).has("auto")) {
+const Q = new URLSearchParams(location.search);
+if (Q.get("map") === "kurtulus") { // birbaşa 2-ci xəritə (yoxlama üçün): ?map=kurtulus&n=60&s=20
+  addEventListener("error", (e) => (document.title = "ERR " + e.message));
+  addEventListener("unhandledrejection", (e) => (document.title = "ERR " + String(e.reason)));
+  const m = MAPS.find((x) => x.id === "kurtulus")!;
+  runKurtulus(engine, canvas, m, { ...setup, soldiers: Number(Q.get("s") ?? 100), enemies: Number(Q.get("n") ?? 300), weapons: ["sniper", "m16"] }, quality, home)
+    .then(() => setTimeout(() => { if (!document.title.startsWith("ERR")) document.title = `OK fps=${engine.getFps().toFixed(0)}`; }, 6000))
+    .catch((e) => (document.title = "ERR " + e));
+} else if (new URLSearchParams(location.search).has("auto")) {
   addEventListener("error", (e) => (document.title = "ERR " + e.message));
   addEventListener("unhandledrejection", (e) => (document.title = "ERR " + String(e.reason)));
   runGame(engine, canvas, MAPS[0], setup, quality, home, new URLSearchParams(location.search).get("at") ?? undefined);

@@ -20,13 +20,22 @@ export const hat = {
     .box(0.03, 0.3, 0.025, "#d4a640", [-0.08, 0.26, 0.13], [0.25, 0, 0.45]).box(0.03, 0.3, 0.025, "#d4a640", [0.08, 0.26, 0.13], [0.25, 0, -0.45])
     .sph(0.26, "#a3171b", [0, -0.04, 0.12], [1, 0.95, 0.6], 8).box(0.13, 0.025, 0.02, "#e8e0d0", [0, -0.1, 0.2]),
   hood: (k: Kit) => k.box(0.24, 0.07, 0.04, "#0c0c0e", [0, -0.05, 0.14]),
+  // kabalak: 1919 türk əsgərinin parçaya bükülmüş xaki dəbilqəsi
+  kabalak: (k: Kit) => k.sph(0.36, "#7a7048", [0, 0.1, -0.01], [1, 0.72, 1.05], 8).cyl(0.1, 0.37, 0.37, "#6a6040", [0, 0.02, -0.01], undefined, 10)
+    .box(0.3, 0.035, 0.04, "#5a5034", [0, 0.17, 0.02], [0, 0, 0.5]).box(0.3, 0.035, 0.04, "#5a5034", [0, 0.17, 0.02], [0, 0, -0.5]),
+  // dəmir dəbilqə (geniş kənarlı)
+  helmet: (k: Kit) => k.cyl(0.03, 0.52, 0.52, "#4a5148", [0, 0.06, 0], undefined, 12).sph(0.34, "#4a5148", [0, 0.1, 0], [1, 0.62, 1], 8, 0.5),
   kasa: (k: Kit) => k.cyl(0.24, 0.05, 0.8, "#c8b070", [0, 0.2, 0], undefined, 12),
 };
-const arm = {
+export const arm = {
   katana: (k: Kit) => k.box(0.025, 0.025, 0.9, "#c8ccd2", [0, 0, 0.5]).box(0.03, 0.03, 0.22, "#1a1a1a", [0, 0, -0.02]).cyl(0.02, 0.09, 0.09, "#d4a640", [0, 0, 0.1], [Math.PI / 2, 0, 0], 8),
   sword: (k: Kit) => k.box(0.02, 0.05, 0.75, "#c8ccd2", [0, 0, 0.42], [0.12, 0, 0]).box(0.12, 0.02, 0.03, "#d4a640", [0, 0, 0.04]),
   musket: (k: Kit) => k.box(0.05, 0.08, 1.4, "#4a3020", [0, 0, 0.35]).cyl(0.9, 0.03, 0.03, "#2a2a2a", [0, 0.03, 0.75], [Math.PI / 2, 0, 0], 6),
   bow: (k: Kit) => k.box(0.03, 1.2, 0.04, "#5a3a22", [0, 0, 0.05]),
+  // süngülü tüfəng: qoz qundaq, uzun lülə, ucunda süngü
+  mauser: (k: Kit) => k.box(0.05, 0.09, 0.62, "#5a3a22", [0, -0.01, 0.05]).box(0.045, 0.07, 0.5, "#6a4428", [0, 0.0, 0.6])
+    .cyl(1.0, 0.025, 0.03, "#26282c", [0, 0.04, 0.72], [Math.PI / 2, 0, 0], 6).box(0.02, 0.02, 0.12, "#3a3c40", [0.04, 0.06, 0.25])
+    .box(0.012, 0.03, 0.42, "#c8ccd2", [0, 0.02, 1.4]).box(0.03, 0.03, 0.05, "#3a3c40", [0, 0.03, 1.2]),
   shuriken: (k: Kit) => k.box(0.03, 0.03, 0.4, "#2a2a2a", [0, 0, 0.18]),
 };
 export const LOOKS: Record<string, Look> = {
@@ -35,6 +44,8 @@ export const LOOKS: Record<string, Look> = {
   yeniceri: { outfit: "Male_Ranger", tint: "#9a2a24", head: hat.bork, hand: arm.musket },
   ottoman: { outfit: "Male_Ranger", tint: "#3d6a40", head: hat.turban, hand: arm.sword },
   okcu: { outfit: "Male_Ranger", tint: "#5a6a34", head: hat.bork, hand: arm.bow },
+  turk: { outfit: "Male_Ranger", tint: "#7a7250", head: hat.kabalak, hand: arm.mauser },
+  isgalci: { outfit: "Male_Ranger", tint: "#4a5868", head: hat.helmet, hand: arm.mauser },
   mulki: { outfit: "Male_Peasant", tint: "#ffffff" },
   mulki2: { outfit: "Female_Peasant", tint: "#ffffff" },
   koylu: { outfit: "Male_Peasant", tint: "#c8d0e0", head: hat.kasa },

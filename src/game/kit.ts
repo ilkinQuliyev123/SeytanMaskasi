@@ -144,7 +144,18 @@ function mongol(k: Kit) {
   return yeniceri(k, "#7a5230", "turban");
 }
 
+/** 1919 əsgəri (uzaq LOD): şinel, qayış, dolaq, papaq və süngülü tüfəng */
+function soldier(k: Kit, coat: string, helmet: boolean) {
+  for (const s of [-1, 1]) k.cyl(0.55, 0.15, 0.13, "#3a3226", [s * 0.13, 0.28, 0]).cyl(0.6, 0.14, 0.12, coat, [s * 0.33, 1.18, 0.03], [0.1, 0, s * 0.12]).sph(0.1, SKIN, [s * 0.35, 0.86, 0.07]);
+  k.cyl(1.15, 0.46, 0.66, coat, [0, 0.98, 0], undefined, 10).cyl(0.08, 0.48, 0.48, "#3a2a1a", [0, 1.12, 0], undefined, 10)
+    .sph(0.34, SKIN, [0, 1.78, 0]).box(0.04, 1.6, 0.04, "#4a3020", [0.3, 1.25, 0.2], [0.2, 0, 0]).box(0.015, 0.4, 0.02, "#c8ccd2", [0.3, 2.2, 0.38], [0.2, 0, 0]);
+  if (helmet) k.cyl(0.03, 0.54, 0.54, "#4a5148", [0, 1.9, 0], undefined, 10).sph(0.38, "#4a5148", [0, 1.92, 0], [1, 0.6, 1], 6, 0.5);
+  else k.sph(0.4, "#7a7048", [0, 1.92, 0], [1, 0.7, 1]);
+  return k;
+}
+
 const MODELS: Record<string, (k: Kit) => unknown> = {
+  turk: (k) => soldier(k, "#6e6644", false), isgalci: (k) => soldier(k, "#45525f", true),
   samurai, ninja, yeniceri: (k) => yeniceri(k, "#8c1c1c", "bork"), ottoman: (k) => yeniceri(k, "#2e5d3a"), mongol,
   okcu: (k) => yeniceri(k, "#3d5a2a", "bork").box(0.04, 1.2, 0.05, "#5a3a22", [-0.42, 1.2, 0.1]),
   mulki: (k) => yeniceri(k, "#7a5a3a"),

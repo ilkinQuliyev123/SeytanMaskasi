@@ -2,7 +2,7 @@
 
 export interface Weapon {
   id: string; name: string; dmg: number; rate: number; // atəş/san
-  mag: number; reload: number; spread: number; range: number; noise: number; melee?: boolean;
+  mag: number; reload: number; spread: number; range: number; noise: number; melee?: boolean; bayonet?: boolean; // bayonet: yaxında süngü ilə vurur
 }
 
 export const WEAPONS: Record<string, Weapon> = {
@@ -20,6 +20,7 @@ export const WEAPONS: Record<string, Weapon> = {
   wakizashi: { id: "wakizashi", name: "Qısa qılınc", dmg: 38, rate: 2.4, mag: 0, reload: 0, spread: 0, range: 2.2, noise: 3, melee: true },
   scimitar: { id: "scimitar", name: "Qılınc", dmg: 30, rate: 1.3, mag: 0, reload: 0, spread: 0, range: 2.4, noise: 5, melee: true },
   musket: { id: "musket", name: "Tüfəng", dmg: 35, rate: 0.5, mag: 1, reload: 3, spread: 0.05, range: 80, noise: 60 },
+  mauser: { id: "mauser", name: "Süngülü tüfəng", dmg: 42, rate: 0.55, mag: 5, reload: 3.2, spread: 0.0016, range: 150, noise: 70, bayonet: true },
   bow: { id: "bow", name: "Yay", dmg: 25, rate: 0.8, mag: 30, reload: 0, spread: 0.05, range: 60, noise: 8 },
 };
 
@@ -39,6 +40,8 @@ export const UNITS: Record<string, UnitType> = {
   mulki: { id: "mulki", name: "Kəndli", hp: 50, speed: 2.2, color: "#8a6a48", weapons: [], ally: false, civ: true },
   koylu: { id: "koylu", name: "Yapon kəndlisi", hp: 50, speed: 1.8, color: "#4a5a6a", weapons: [], ally: true, civ: true },
   mulki2: { id: "mulki2", name: "Kəndli qadın", hp: 50, speed: 2.0, color: "#6a4a6a", weapons: [], ally: false, civ: true },
+  turk: { id: "turk", name: "Türk əsgəri", hp: 130, speed: 4.4, color: "#6b6440", weapons: ["mauser"], ally: true },
+  isgalci: { id: "isgalci", name: "İşğalçı əsgər", hp: 120, speed: 4.1, color: "#3e4a5a", weapons: ["mauser"], ally: false },
   mongol: { id: "mongol", name: "Monqol döyüşçüsü", hp: 110, speed: 4.6, color: "#7a5230", weapons: ["bow", "scimitar"], ally: false },
 };
 
@@ -52,7 +55,8 @@ export interface GameMap { id: string; name: string; desc: string; ready: boolea
 export const MAPS: GameMap[] = [
   { id: "palace", name: "Samuray: Dörd dağın hökmdarı", ready: true, forts: ["ottoman"], startHour: 23,
     desc: "Gecədir. Dörd dağ arasındakı sarayından çıx, keçiddən 1 km irəlidəki Osmanlı qəsrinə basqın et, yeniçəriləri təmizlə." },
-  { id: "kurtulus", name: "Qurtuluş Savaşı (1919–1922)", ready: false, desc: "Fiktiv komandir. Tezliklə.", forts: [] },
+  { id: "kurtulus", name: "Qurtuluş Savaşı (1919–1922)", ready: true, forts: [], startHour: 6.05,
+    desc: "Sübh çağı. Kənddəki kazarmadan çıx, 10 səngər xəttini sahilə qədər təmizlə. Təpələrdəki toplarla 9 gəmilik donanmanı batır." },
   { id: "karabakh", name: "Qarabağ zonası", ready: false, desc: "Tezliklə.", forts: [] },
   { id: "city", name: "İşğal altındakı şəhər", ready: false, desc: "Fiktiv şəhər, mülkiləri qoru. Tezliklə.", forts: [] },
 ];
@@ -72,5 +76,7 @@ export const FORMS: Form[] = [
   { id: "qalxan", name: "Qalxan", desc: "Sənə zərər yox, dəstə sağalır", dur: 15, cd: 50, color: "#4a8cff" },
 ];
 
-export interface ArmySetup { samurai: number; ninja: number; samuraiWeapon: string; ninjaWeapon: string; enemies: number; weapons: string[] }
-export const DEFAULT_SETUP: ArmySetup = { samurai: 6, ninja: 4, samuraiWeapon: "katana", ninjaWeapon: "shuriken", enemies: 500, weapons: [...PLAYER_WEAPONS] };
+export interface ArmySetup { soldiers?: number; samurai: number; ninja: number; samuraiWeapon: string; ninjaWeapon: string; enemies: number; weapons: string[] }
+/** Qurtuluş Savaşı: oyunçunun silahları — snayper və M16 */
+export const KURTULUS_WEAPONS = ["sniper", "m16"];
+export const DEFAULT_SETUP: ArmySetup = { samurai: 6, ninja: 4, samuraiWeapon: "katana", ninjaWeapon: "shuriken", enemies: 500, weapons: [...PLAYER_WEAPONS], soldiers: 100 };

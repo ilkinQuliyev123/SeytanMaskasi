@@ -29,6 +29,8 @@ export class Sky {
   hour = 9;
   speed = 1 / 120; // 1 oyun saatı = 2 real dəqiqə
   weather: WeatherT = "aydın";
+  /** true — hava dəyişmir (məs. sübh səhnəsi) */
+  fixedWeather = false;
   private sun: DirectionalLight;
   private amb: HemisphericLight;
   private rain: ParticleSystem;
@@ -91,7 +93,7 @@ export class Sky {
 
   update(dt: number, fast = false) {
     this.hour = (this.hour + dt * this.speed * (fast ? 30 : 1)) % 24;
-    if ((this.nextWeather -= dt) <= 0) {
+    if (!this.fixedWeather && (this.nextWeather -= dt) <= 0) {
       this.weather = Math.random() < 0.5 ? "aydın" : WEATHERS[Math.floor(Math.random() * WEATHERS.length)];
       this.nextWeather = 150 + Math.random() * 200;
     }

@@ -35,9 +35,11 @@ export class Unit implements Target {
   mesh: InstancedMesh; hp: number; gun: Gun; facing = 0; target: Target | null = null;
   alert: Vector3 | null = null; fort = ""; route: { x: number; z: number }[] | null = null; private ri = 0; private dir = 1;
   stun = 0; acc = 0; dist = 0; private blk = false; // acc/dist — oyun dövrəsi üçün (uzaqdakılar seyrək yenilənir)
-  private think = Math.random() * 0.25; private wp: Vector3; private bob = Math.random() * 6;
+  private melee = false; private think = Math.random() * 0.25; private wp: Vector3; private bob = Math.random() * 6;
   anim: AnimState | null = null; private shotT = 0; private moved = 0; private want: AnimState = "idle"; private wantT = 0;
   far: InstancedMesh | null = null; near = false; // far — uzaq məsafə üçün sadə model
+  /** dəstə əsgəri: bu nöqtədə dayanır (məs. topun yanında) — izləmə əmri onu aparmır */
+  hold: Vector3 | null = null;
   constructor(scene: Scene, public type: UnitType, weaponId: string, public pos: Vector3, private home: Vector3, public post: Post | null = null) {
     let m: InstancedMesh | null = null;
     if (chars?.has(type.id)) try { m = chars.instance(type.id, "idle"); this.anim = "idle"; } catch { /* sadə modelə keç */ }
@@ -154,14 +156,19 @@ export class Unit implements Target {
     const w = this.gun.w;
     if (this.target) {
       const d = Math.hypot(this.pos.x - this.target.pos.x, this.pos.z - this.target.pos.z);
-      const want = w.melee ? w.range * 0.8 : Math.min(w.range * 0.6, 25);
+      const bay = !!w.bayonet && d < 3; // süngü: yaxında tüfənglə deyil, süngü ilə
+      const charge = !!w.bayonet && this.ally && ctx.order === "attack" && d < 40; // hücum əmrində 40 m-dən süngü həmləsi
+      const want = w.melee || charge ? 2 : Math.min(w.range * 0.6, 25);
       const blocked = this.blk;
       if (d > want || blocked) { goal = this.target.pos; speed = this.type.speed * 1.3; }
       this.face(this.target.pos);
-      if (d <= w.range && !blocked && this.gun.fire()) {
-        this.shotT = 0.7;
+      if (bay && this.shotT <= -0.4) { // süngü zərbəsi (sursat xərcləmir)
+        this.shotT = 0.7; this.melee = true;
+        if (Math.random() < 0.7) this.target.hit(55 * (0.8 + Math.random() * 0.4), this.pos, "bayonet");
+      } else if (!bay && d <= w.range && !blocked && this.gun.fire()) {
+        this.shotT = 0.7; this.melee = false;
         const hit = Math.random() < hitChance(w, d);
-        if (hit) this.target.hit(w.dmg * (0.8 + Math.random() * 0.4));
+        if (hit) this.target.hit(w.dmg * (0.8 + Math.random() * 0.4), this.pos);
         if (!w.melee) ctx.onShot(this.pos.add(new Vector3(0, 1.5, 0)), this.target.pos.add(new Vector3(0, 1.2, 0)), hit, w.id);
       }
     } else if (this.ally) {
@@ -170,7 +177,7 @@ export class Unit implements Target {
       if (ctx.order === "attack" && !this.alert && (this.think > 0.2)) { // növbəti hədəf: ən yaxın canlı düşmən (200 m)
         let bd = 40000; for (const f of ctx.foes) { if (!f.alive) continue; const d = (f.pos.x - this.pos.x) ** 2 + (f.pos.z - this.pos.z) ** 2; if (d < bd) { bd = d; this.alert = f.pos.clone(); } }
       }
-      goal = ctx.order === "follow" ? ctx.leader.add(new Vector3(Math.cos(ang) * rr, 0, Math.sin(ang) * rr)) : this.alert;
+      goal = this.hold ? this.hold : ctx.order === "follow" ? ctx.leader.add(new Vector3(Math.cos(ang) * rr, 0, Math.sin(ang) * rr)) : this.alert;
       const far = goal ? Vector3.Distance(goal, this.pos) : 0;
       speed = this.type.speed * (far > 40 ? 2 : far > 10 ? 1.3 : 0.7); // geri qalanda tələsir
     } else if (this.alert) {
@@ -191,7 +198,7 @@ export class Unit implements Target {
     if (goal) this.move(goal, speed * dt, ctx.grid, ctx.mates);
     this.place();
     if (this.anim) { // hal 0.3 s dəyişməz qalanda keçid (titrəmə olmasın); uzaqda heç keçmir
-      const s: AnimState = this.shotT > 0 ? (w.melee ? "attack" : "shoot") : this.moved > 0.004 ? (speed > this.type.speed ? "run" : "walk") : "idle";
+      const s: AnimState = this.shotT > 0 ? (w.melee || this.melee ? "attack" : "shoot") : this.moved > 0.004 ? (speed > this.type.speed ? "run" : "walk") : "idle";
       if (s !== this.want) { this.want = s; this.wantT = 0; } else this.wantT += dt;
       if (this.near && (this.wantT > 0.3 || s === "attack" || s === "shoot")) this.setAnim(s);
     }
