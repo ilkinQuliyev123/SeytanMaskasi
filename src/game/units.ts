@@ -45,7 +45,7 @@ export class Unit implements Target {
     if (chars?.has(type.id)) try { m = chars.instance(type.id, "idle"); this.anim = "idle"; } catch { /* sadə modelə keç */ }
     this.mesh = m ?? baseMesh(scene, type).createInstance(type.id);
     this.mesh.metadata = { unit: this };
-    if (m) { this.far = baseMesh(scene, type).createInstance(type.id + "_far"); this.far.metadata = { unit: this }; this.mesh.isVisible = false; if (type.civ) this.far.isPickable = false; }
+    if (m) { this.far = baseMesh(scene, type).createInstance(type.id + "_far"); this.far.metadata = { unit: this }; this.mesh.isVisible = false; this.mesh.isPickable = false; if (type.civ) this.far.isPickable = false; } // vurma yoxlaması sadə model üzrə (görünməsə də)
     if (type.civ) this.mesh.isPickable = false; // güllə mülkilərdən keçir
     this.hp = type.hp;
     this.gun = new Gun(WEAPONS[weaponId] ?? WEAPONS[type.weapons[0]] ?? WEAPONS.scimitar);
@@ -107,7 +107,7 @@ export class Unit implements Target {
     if (!chars || !this.anim || this.anim === s) return;
     const old = this.mesh;
     try { this.mesh = chars.instance(this.type.id, s); } catch { return; }
-    this.mesh.metadata = old.metadata; this.mesh.isPickable = old.isPickable && s !== "dead"; this.mesh.isVisible = old.isVisible;
+    this.mesh.metadata = old.metadata; this.mesh.isPickable = false; this.mesh.isVisible = old.isVisible;
     if (this.type.civ) this.mesh.isPickable = false;
     this.anim = s; old.dispose(); this.place();
   }
@@ -124,7 +124,10 @@ export class Unit implements Target {
     this.mesh.position.copyFrom(this.pos);
     this.mesh.rotation.y = this.facing;
     if (this.far) { this.far.position.copyFrom(this.pos); this.far.rotation.y = this.facing; }
-    if (this.anim && this.mesh.scaling.x > 0) this.mesh.scaling.x = -1;
+    if (this.anim) { // skeletli instance-da glTF kökünün güzgüsü dünya fəzasında tətbiq olunur: x və fırlanma əks çevrilir — burada kompensasiya
+      if (this.mesh.scaling.x > 0) this.mesh.scaling.x = -1;
+      this.mesh.position.x = -this.pos.x; this.mesh.rotation.y = -this.facing;
+    }
   }
 
   update(dt: number, ctx: Ctx) {

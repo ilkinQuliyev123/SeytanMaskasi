@@ -1,112 +1,111 @@
-// Qurtuluş Savaşı xəritəsi — dünya. Qərbdə türk kəndi (bizim kazarma), şərqə doğru 100 m-dən bir 10 səngər xətti sahilə qədər,
-// səngərlər arası otlu-ağaclı-kollu təpələr, 3 düşmən kazarması, 6 top təpəsi (ən hündüründə böyük top, ora çıxan yol), dəniz.
-// Koordinatlar: +x — dənizə (şərq, günəş dənizdən doğur), z — sahil boyu.
+// Qurtuluş Savaşı xəritəsi — dünya. Dar vadi: sağda və solda dağ silsiləsi, meydan dağlarda bitir.
+// Qərbdə kənd və divarlı kazarma (döyüşə buradan çıxırıq) → 200 m otlaq və samanlıq → 200 m-dən bir 10 səngər xətti → sahil → dəniz (donanma).
+// Səngərlər arası otlu-ağaclı-kollu təpələr; dağ ətəklərində 6 top təpəsi (ən hündüründə böyük top, ora ziqzaq yol çıxır).
+// Koordinatlar: +x — dənizə (şərq, günəş dənizdən doğur), z — vadinin eni.
 import { Color3, DynamicTexture, Matrix, Mesh, MeshBuilder, Scene, StandardMaterial, Texture, Vector2, Vector3, VertexBuffer } from "@babylonjs/core";
 import { Grid, heightAt, rng, setGroundSampler } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
 import { environment, pbr, terrainMaterial } from "./materials";
 import { scatter, segObs, setGrassFn, tm as M, type Quality } from "./world";
 
-export const COAST = 800; // su xətti təxminən burada
-export const TRENCH_X = Array.from({ length: 10 }, (_, i) => -150 + i * 100);
-export const TRENCH_Z = 230; // səngərlər z = −230…230
-export const VILLAGE = { x: -720, z: 0, r: 120 };
-export const OUR_BARRACKS = { x: -690, z: 0 };
-export const ENEMY_BARRACKS = [{ x: 100, z: -110 }, { x: 400, z: 120 }, { x: 700, z: -60 }];
+export const TRENCH_X = Array.from({ length: 10 }, (_, i) => -1000 + i * 200); // 200 m-dən bir: −1000…800
+export const TRENCH_Z = 245; // səngərlər vadinin bütün enində
+export const COAST = 960; // su xətti
+export const OUR_BARRACKS = { x: -1290, z: 0 };
+export const COMPOUND = { x0: -1345, x1: -1190, z0: -95, z1: 95 }; // kazarma divarları (darvaza şərqdə)
+export const MEADOW = { x0: -1185, x1: -1015 }; // otlaq və samanlıq
+export const VILLAGE = { x: -1300, z: 0, r: 175 };
+export const VALLEY = 310; // |z| > VALLEY — dağ yamacı başlayır
+/** oyun meydanı: uzunluq — kənddən gəmilərə qədər, en — iki dağ arası */
+export const AREA = { x0: -1460, x1: 1500, z0: -340, z1: 340 };
+export const ENEMY_BARRACKS = [{ x: -500, z: 150 }, { x: 100, z: -150 }, { x: 700, z: 135 }];
 export interface Hill { x: number; z: number; h: number; s: number; big?: boolean }
 export const HILLS: Hill[] = [
-  { x: 330, z: -470, h: 92, s: 95, big: true }, // ən hündür — böyük top
-  { x: -60, z: 360, h: 34, s: 48 }, { x: 210, z: 390, h: 38, s: 50 }, { x: 520, z: 360, h: 36, s: 48 },
-  { x: 640, z: -380, h: 33, s: 45 }, { x: 30, z: -390, h: 30, s: 45 },
+  { x: 300, z: -325, h: 92, s: 62, big: true }, // ən hündür — böyük sahil topu
+  { x: -650, z: 305, h: 34, s: 40 }, { x: -200, z: -315, h: 36, s: 40 }, { x: 100, z: 310, h: 38, s: 40 },
+  { x: 500, z: 310, h: 36, s: 40 }, { x: 720, z: -310, h: 33, s: 38 },
 ];
-/** oyun meydanı: 10 km uzunluq (x, qərbdən dənizə), 5 km en (z). Kənarında dağlar; oyunçu çıxa bilmir */
-export const AREA = { x0: -7500, x1: 2500, z0: -2500, z1: 2500 };
-// relyef: döyüş sahəsi ətraflı (≈6.5 m), qalan ərazi kobud (25 m); ətraflı yamaq kobud şəbəkənin xətlərinə düşür
-const P = { x0: -1300, x1: 900, z0: -1300, z1: 1300 }, LAND_X1 = 900, CELL = 25;
+const G0 = { x0: -1620, x1: 1060, z0: -620, z1: 620 }; // relyef meşi
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const smooth = (a: number, b: number, v: number) => { const t = clamp01((v - a) / (b - a)); return t * t * (3 - 2 * t); };
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const baseAt = (x: number, z: number) => 3 + 1.4 * Math.sin(x * 0.012 + 0.5) * Math.cos(z * 0.01) + 0.7 * Math.sin(x * 0.029) * Math.sin(z * 0.025 + 1);
+const baseAt = (x: number, z: number) => 3 + 1.2 * Math.sin(x * 0.011 + 0.5) * Math.cos(z * 0.013) + 0.6 * Math.sin(x * 0.029) * Math.sin(z * 0.025 + 1);
 
 /** səngərlər arasındakı təpələr (yerində boşluqlar var ki, keçmək olsun) */
 export function ridgeAt(x: number, z: number) {
-  if (x < -135 || x > 735 || Math.abs(z) > 300) return 0;
+  if (x < -930 || x > 930 || Math.abs(z) > VALLEY) return 0;
   let r = 0;
   for (let i = 0; i < 9; i++) {
-    const dx = x - (-100 + i * 100);
-    if (Math.abs(dx) > 40) continue;
-    const gate = clamp01(0.55 + 0.6 * Math.sin(z * 0.03 + i * 1.7));
-    r += 7 * gate * Math.exp(-(dx * dx) / 288) * clamp01((300 - Math.abs(z)) / 60);
+    const dx = x - (TRENCH_X[i] + 100);
+    if (Math.abs(dx) > 70) continue;
+    const gate = clamp01(0.5 + 0.65 * Math.sin(z * 0.028 + i * 1.7));
+    r += 8.5 * gate * Math.exp(-(dx * dx) / (2 * 22 * 22));
   }
   return r;
 }
-const FLAT = [{ x: VILLAGE.x, z: VILLAGE.z, r: VILLAGE.r, r2: VILLAGE.r + 50 }, ...ENEMY_BARRACKS.map((b) => ({ x: b.x, z: b.z, r: 32, r2: 52 }))];
+const FLAT = [{ x: VILLAGE.x, z: VILLAGE.z, r: VILLAGE.r, r2: VILLAGE.r + 40 }, ...ENEMY_BARRACKS.map((b) => ({ x: b.x, z: b.z, r: 34, r2: 56 }))];
 const hillAt = (x: number, z: number) => HILLS.reduce((h, c) => h + c.h * Math.exp(-((x - c.x) ** 2 + (z - c.z) ** 2) / (2 * c.s * c.s)), 0);
+/** vadinin iki yanında dağ silsiləsi + qərbdə (kəndin arxası) */
+const mountain = (x: number, z: number) => {
+  const e = Math.max(0, Math.abs(z) - VALLEY, AREA.x0 + 40 - x) , n = 1 + 0.25 * Math.sin(x * 0.013) + 0.15 * Math.sin(x * 0.041 + z * 0.02);
+  return Math.min(230, e * e * 0.0075 * n);
+};
 
 export function kurtulusRaw(x: number, z: number) {
   let h = baseAt(x, z) + ridgeAt(x, z) + hillAt(x, z);
-  const far = clamp01((Math.hypot((x + 300) * 0.8, z) - 1500) / 1800); // döyüşdən uzaqda — böyük yaşıl təpələr
-  h += far * (18 * (0.5 + 0.5 * Math.sin(x * 0.0031 + 1.1) * Math.cos(z * 0.0027)) + 9 * Math.sin(x * 0.0083) * Math.sin(z * 0.0071 + 0.6) + 9);
-  const e = Math.max(0, AREA.x0 + 380 - x, Math.abs(z) - (AREA.z1 - 380)); // meydanın kənarında dağ silsiləsi
-  h += Math.min(190, e * e * 0.0016);
   for (const f of FLAT) { const d = Math.hypot(x - f.x, z - f.z); if (d < f.r2) h = lerp(baseAt(f.x, f.z), h, smooth(f.r, f.r2, d)); }
+  h += mountain(x, z);
   return lerp(h, -9, smooth(COAST - 40, COAST + 45, x)); // sahil → dəniz dibi
 }
 const nearTrench = (x: number, z: number, pad = 9) => Math.abs(z) < TRENCH_Z + pad && TRENCH_X.some((t) => Math.abs(x - t) < pad);
 /** səngərlər arası birləşdirici səngərlər (yollar): hər boşluqda iki */
-export const LINKS = TRENCH_X.slice(0, -1).flatMap((x, i) => [[-140, 120][i % 2], [70, -50][i % 2]].map((z) => ({ x1: x + 2.5, x2: x + 100 - 2.5, z })));
+export const LINKS = TRENCH_X.slice(0, -1).flatMap((x, i) => [[-150, 110][i % 2], [60, -60][i % 2]].map((z) => ({ x1: x + 2.5, x2: x + 200 - 2.5, z })));
 const onLink = (x: number, z: number, pad = 5) => LINKS.some((l) => x > l.x1 - 2 && x < l.x2 + 2 && Math.abs(z - l.z) < pad);
-/** böyük təpəyə spiral yol */
+/** böyük təpəyə ziqzaq yol (vadi tərəfindən) */
 const BIG = HILLS[0];
-export const hillRoad = Array.from({ length: 140 }, (_, i) => {
-  const t = i / 139, a = t * Math.PI * 2.6, r = 170 * (1 - t) + 9;
-  return { x: BIG.x + Math.sin(a) * r, z: BIG.z + Math.cos(a) * r };
+export const hillRoad = Array.from({ length: 160 }, (_, i) => {
+  const t = i / 159;
+  return { x: BIG.x + 70 * Math.sin(t * Math.PI * 3.5) * (1 - t * 0.85), z: BIG.z + 150 - t * 146 };
 });
-const onRoad = (x: number, z: number, pad = 6) => Math.hypot(x - BIG.x, z - BIG.z) < 190 && hillRoad.some((p) => Math.abs(p.x - x) < pad && Math.abs(p.z - z) < pad);
-/** oyunçu hündür otda gizlənir: təpələrin otlu yamacları */
-export const kurtulusGrass = (x: number, z: number) => ridgeAt(x, z) > 2.2 && !nearTrench(x, z, 6) && !onLink(x, z, 3);
+const onRoad = (x: number, z: number, pad = 6) => Math.abs(x - BIG.x) < 90 && z > BIG.z - 10 && z < BIG.z + 160 && hillRoad.some((p) => Math.abs(p.x - x) < pad && Math.abs(p.z - z) < pad);
+const inMeadow = (x: number, z: number) => x > MEADOW.x0 && x < MEADOW.x1 && Math.abs(z) < VALLEY - 10;
+/** oyunçu hündür otda gizlənir: təpələrin otlu yamacları və otlağın biçilməmiş zolaqları */
+export const kurtulusGrass = (x: number, z: number) => (ridgeAt(x, z) > 2.5 && !nearTrench(x, z, 6) && !onLink(x, z, 3)) || (inMeadow(x, z) && Math.sin(z * 0.045) > 0.55);
 
 export interface Post { x: number; z: number; trench: number }
 export function buildKurtulus(scene: Scene, quality: Quality) {
-  const grid = new Grid(), anchors: Vector3[] = [];
-  // --- relyef: kobud (bütün meydan) + ətraflı yamaq (döyüş sahəsi) ---
-  const r0 = rng(7);
-  const colorAt = (x: number, z: number, h: number) => {
+  const grid = new Grid(), anchors: Vector3[] = [], r0 = rng(7);
+  const sx = quality === "mid" ? 540 : 420, sz = quality === "mid" ? 250 : 190;
+  const ground = MeshBuilder.CreateGround("ground", { width: G0.x1 - G0.x0, height: G0.z1 - G0.z0, subdivisionsX: sx, subdivisionsY: sz, updatable: true }, scene);
+  ground.position.set((G0.x0 + G0.x1) / 2, 0, (G0.z0 + G0.z1) / 2);
+  const pos = ground.getVerticesData(VertexBuffer.PositionKind)!, col: number[] = [];
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i] + ground.position.x, z = pos[i + 2] + ground.position.z, h = kurtulusRaw(x, z);
+    pos[i + 1] = h;
     const slope = Math.abs(kurtulusRaw(x + 4, z) - h) + Math.abs(kurtulusRaw(x, z + 4) - h);
-    const rock = clamp01(Math.max((slope - 3.2) / 4, (h - 110) / 40));
+    const rock = clamp01(Math.max((slope - 3.4) / 4, (h - 120) / 40));
     const meadow = clamp01(0.55 + 0.45 * Math.sin(x * 0.017 + 1) * Math.cos(z * 0.013) + (r0() - 0.5) * 0.25);
     let c = [(1 - rock) * (1 - meadow) * 0.6, (1 - rock) * meadow, rock];
-    if (x > COAST - 45) c = [0, 0.05 * (1 - clamp01((x - COAST + 45) / 30)), 0.12]; // qumlu sahil (torpaq)
+    if (x > COAST - 45) c = [0, 0.05 * (1 - clamp01((x - COAST + 45) / 30)), 0.12]; // qumlu sahil
     else if (nearTrench(x, z, 10) || onLink(x, z, 4)) c = [0.05, 0.12, 0.02]; // səngər ətrafı — eşilmiş torpaq
+    else if (inMeadow(x, z)) c = [0.02, 0.85, 0]; // otlaq
     else if (x > TRENCH_X[0] - 30 && x < COAST - 40 && Math.abs(z) < TRENCH_Z + 20 && ridgeAt(x, z) < 1.2) c = [c[0] * 0.5, c[1] * 0.45, c[2]]; // döyüş sahəsi — çox torpaq
     for (const f of FLAT) if (Math.hypot(x - f.x, z - f.z) < f.r - 8) c = [0.05, 0.25, 0.02];
-    return c;
-  };
-  const makeGround = (name: string, x0: number, x1: number, z0: number, z1: number, sx: number, sz: number, hole: boolean) => {
-    const g = MeshBuilder.CreateGround(name, { width: x1 - x0, height: z1 - z0, subdivisionsX: sx, subdivisionsY: sz, updatable: true }, scene);
-    g.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2);
-    const pos = g.getVerticesData(VertexBuffer.PositionKind)!, col: number[] = [];
-    for (let i = 0; i < pos.length; i += 3) {
-      const x = pos[i] + g.position.x, z = pos[i + 2] + g.position.z, h = kurtulusRaw(x, z);
-      const inside = hole && x > P.x0 + 1 && x < P.x1 - 1 && z > P.z0 + 1 && z < P.z1 - 1; // ətraflı yamağın altında — gizlənir
-      pos[i + 1] = inside ? h - 4 : h;
-      const c = colorAt(x, z, h); col.push(c[0], c[1], c[2], 1);
-    }
-    g.updateVerticesData(VertexBuffer.PositionKind, pos); g.setVerticesData(VertexBuffer.ColorKind, col);
-    g.createNormals(false); g.updateCoordinateHeights();
-    g.isPickable = false; g.receiveShadows = true; g.freezeWorldMatrix();
-    return g;
-  };
-  const ground = makeGround("ground", P.x0, P.x1, P.z0, P.z1, quality === "mid" ? 420 : 340, quality === "mid" ? 360 : 290, false);
-  const coarse = makeGround("groundFar", AREA.x0, LAND_X1, AREA.z0, AREA.z1, (LAND_X1 - AREA.x0) / CELL, (AREA.z1 - AREA.z0) / CELL, true);
-  setGroundSampler((x, z) => (x > LAND_X1 - 6 ? -9 : x > P.x0 && x < P.x1 && z > P.z0 && z < P.z1 ? ground.getHeightAtCoordinates(x, z) : coarse.getHeightAtCoordinates(x, z)));
+    col.push(c[0], c[1], c[2], 1);
+  }
+  ground.updateVerticesData(VertexBuffer.PositionKind, pos);
+  ground.setVerticesData(VertexBuffer.ColorKind, col);
+  ground.createNormals(false); ground.updateCoordinateHeights();
+  ground.isPickable = false; ground.receiveShadows = true; ground.freezeWorldMatrix();
+  setGroundSampler((x, z) => (x > G0.x1 - 6 ? -9 : ground.getHeightAtCoordinates(x, z)));
   setGrassFn(kurtulusGrass);
   const env = environment(scene); env.level = 0.6;
-  ground.material = coarse.material = terrainMaterial(scene);
+  ground.material = terrainMaterial(scene);
 
   const sea = buildSea(scene);
   buildVillage(scene, grid, anchors);
+  buildMeadow(scene, grid);
   ENEMY_BARRACKS.forEach((b, i) => buildEnemyBarracks(scene, grid, b.x, b.z, i));
   const posts = buildTrenches(scene, quality);
   buildHillRoad(scene);
@@ -131,10 +130,11 @@ function buildSea(scene: Scene) {
   m.bumpTexture = t; m.bumpTexture.level = 0.5; m.emissiveColor = new Color3(0.02, 0.05, 0.08);
   const sea = MeshBuilder.CreateGround("seaPlane", { width: 12000, height: 12000 }, scene);
   sea.position.set(COAST + 5200, 0, 0); sea.material = m; sea.isPickable = false;
+  m.freeze();
   return { mesh: sea, tex: t };
 }
 
-const STONE = "#b8ab8f", PLASTER = "#e2d6bf", WOOD = "#4a3020", TILE = "#8e4a2e", EARTH = "#5b4a36", BAG = "#9a8a64";
+const STONE = "#b8ab8f", PLASTER = "#e2d6bf", WOOD = "#4a3020", TILE = "#8e4a2e", EARTH = "#5b4a36", BAG = "#9a8a64", HAY = "#c9a85a";
 const TM: Record<string, [string, string]> = { [STONE]: ["sandstone", "#e0d4bc"], [PLASTER]: ["plaster", "#ffffff"], [WOOD]: ["cedar", "#6a4a34"], [TILE]: ["roof", "#ffffff"], [EARTH]: ["dirt", "#b49a7c"] };
 function rect(g: Grid, x: number, z: number, w: number, d: number, rot: number) { // fırlanmış düzbucaqlı → dairələr
   const c = Math.cos(rot), s = Math.sin(rot), long = d > w, L = Math.max(w, d), r = Math.min(w, d) / 2;
@@ -142,11 +142,10 @@ function rect(g: Grid, x: number, z: number, w: number, d: number, rot: number) 
   segObs(g, x - ax * h, z - az * h, x + ax * h, z + az * h, r + 0.2);
 }
 
-// --- bizim kənd: daş evlər, kirəmit damlar, məscid, uzun kazarma (döyüşə buradan çıxırıq) ---
+// --- bizim kənd + divarlı kazarma (darvaza şərqdə — döyüşə buradan çıxırıq) ---
 function buildVillage(scene: Scene, grid: Grid, anchors: Vector3[]) {
   const k = new Kit(scene), glow = new Kit(scene), r = rng(9);
   k.texMap = TM;
-  const y0 = heightAt(VILLAGE.x, VILLAGE.z);
   const house = (x: number, z: number, w: number, d: number, rot: number, floors = 1) => {
     const y = heightAt(x, z) - 0.3, H = 3.2 * floors, R: [number, number, number] = [0, rot, 0];
     k.box(w, H, d, floors > 1 ? PLASTER : STONE, [x, y + H / 2, z], R).box(w + 0.3, 0.5, d + 0.3, STONE, [x, y + 0.25, z], R)
@@ -155,38 +154,68 @@ function buildVillage(scene: Scene, grid: Grid, anchors: Vector3[]) {
     if (r() < 0.5) glow.box(0.7, 0.7, 0.1, "#ffffff", [x + Math.sin(rot) * (d / 2 + 0.06) + Math.cos(rot) * 1.6, y + 2, z + Math.cos(rot) * (d / 2 + 0.06) - Math.sin(rot) * 1.6], R);
     rect(grid, x, z, w, d, rot);
   };
-  // kazarma: 50×14 m, qapısı şərqə (döyüşə) baxır; qarşısında həyət
+  // kazarma binası 50×14, qapısı şərqə
   const B = OUR_BARRACKS, by = heightAt(B.x, B.z) - 0.3;
   k.box(14, 5, 50, STONE, [B.x, by + 2.5, B.z]).roof(15.5, 51.5, 2.6, TILE, [B.x, by + 6.3, B.z], 0, 0.15);
   for (let i = -3; i <= 3; i++) glow.box(0.1, 1, 1.6, "#ffffff", [B.x + 7.06, by + 2.6, B.z + i * 6.5]);
   k.box(0.15, 3.2, 3.6, WOOD, [B.x + 7.05, by + 1.6, B.z]);
-  k.box(1.2, 9, 1.2, WOOD, [B.x + 12, by + 4.5, B.z - 9]); // bayraq dirəyi
-  const flag = new Kit(scene); flag.box(0.05, 2.2, 3.4, "#c8102e", [B.x + 12, by + 8, B.z - 7.2]);
-  flag.build("flag", vcMat(scene, "vcFlag", 0.1)).isPickable = false;
-  const fw = new Kit(scene); fw.cyl(0.05, 0.7, 0.7, "#ffffff", [B.x + 12.03, by + 8.1, B.z - 7.4], [0, 0, Math.PI / 2], 14).cyl(0.06, 0.6, 0.6, "#c8102e", [B.x + 12.04, by + 8.1, B.z - 7.25], [0, 0, Math.PI / 2], 14)
-    .box(0.06, 0.25, 0.25, "#ffffff", [B.x + 12.05, by + 8.1, B.z - 6.75], [Math.PI / 4, 0, 0]); // ay-ulduz
-  fw.build("flagSign", vcMat(scene, "vcFlag", 0.1)).isPickable = false;
   rect(grid, B.x, B.z, 14, 50, 0);
   anchors.push(new Vector3(B.x + 8, by + 3, B.z));
-  // məscid: kub, günbəz, minarə
-  const mx = VILLAGE.x - 60, mz = VILLAGE.z + 55, my = heightAt(mx, mz) - 0.3;
+  // kazarma divarları: 2.6 m daş divar, şərqdə 12 m darvaza
+  const C = COMPOUND, wall = (x1: number, z1: number, x2: number, z2: number) => {
+    const L = Math.hypot(x2 - x1, z2 - z1), a = Math.atan2(x2 - x1, z2 - z1), cx = (x1 + x2) / 2, cz = (z1 + z2) / 2, y = heightAt(cx, cz) - 0.4;
+    k.box(1, 2.9, L, STONE, [cx, y + 1.45, cz], [0, a, 0]).box(1.3, 0.3, L + 0.3, STONE, [cx, y + 3, cz], [0, a, 0]);
+    segObs(grid, x1, z1, x2, z2, 0.8);
+  };
+  wall(C.x0, C.z0, C.x1, C.z0); wall(C.x0, C.z1, C.x1, C.z1); wall(C.x0, C.z0, C.x0, C.z1);
+  wall(C.x1, C.z0, C.x1, -6); wall(C.x1, 6, C.x1, C.z1);
+  for (const s of [-1, 1]) k.box(2.4, 6, 2.4, STONE, [C.x1, heightAt(C.x1, s * 7.2) + 2.6, s * 7.2]);
+  k.box(1, 1.2, 15, STONE, [C.x1, heightAt(C.x1, 0) + 5.2, 0]);
+  // bayraq: darvazanın üstündə
+  const fy = heightAt(C.x1, 0);
+  k.box(0.3, 8, 0.3, WOOD, [C.x1 - 1, fy + 9, 0]);
+  const flag = new Kit(scene); flag.box(0.05, 2.2, 3.4, "#c8102e", [C.x1 - 1, fy + 11.6, 1.8]);
+  flag.cyl(0.05, 0.7, 0.7, "#ffffff", [C.x1 - 0.97, fy + 11.7, 1.6], [0, 0, Math.PI / 2], 14).cyl(0.06, 0.6, 0.6, "#c8102e", [C.x1 - 0.96, fy + 11.7, 1.75], [0, 0, Math.PI / 2], 14)
+    .box(0.06, 0.25, 0.25, "#ffffff", [C.x1 - 0.95, fy + 11.7, 2.25], [Math.PI / 4, 0, 0]);
+  flag.build("flag", vcMat(scene, "vcFlag", 0.1)).isPickable = false;
+  // məscid
+  const mx = VILLAGE.x - 90, mz = 130, my = heightAt(mx, mz) - 0.3;
   k.box(13, 8, 13, STONE, [mx, my + 4, mz]).sph(10, "#8a8f96", [mx, my + 8, mz], [1, 0.9, 1], 10, 0.5)
-    .cyl(24, 1.6, 2, STONE, [mx + 8, my + 12, mz + 6], undefined, 10).cyl(0.6, 2.6, 2.6, STONE, [mx + 8, my + 19, mz + 6], undefined, 10)
-    .cyl(4, 0, 1.8, "#8a8f96", [mx + 8, my + 26, mz + 6], undefined, 10);
-  rect(grid, mx, mz, 13, 13, 0); grid.add({ x: mx + 8, z: mz + 6, r: 1.3 });
-  anchors.push(new Vector3(mx, my + 4, mz - 8));
-  // evlər: iki halqa; şərq yolu və kazarma həyəti boş qalır
-  for (const [rad, n] of [[42, 12], [75, 18], [105, 22]] as const) for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2 + r() * 0.2, x = VILLAGE.x + Math.sin(a) * rad, z = VILLAGE.z + Math.cos(a) * rad;
-    if (Math.abs(z - VILLAGE.z) < 14 && x > VILLAGE.x - 10) continue; // şərq yolu
-    if (Math.abs(x - B.x) < 30 && Math.abs(z - B.z) < 36) continue; // kazarma + həyət
-    if (Math.hypot(x - mx, z - mz) < 18) continue;
-    house(x, z, 6 + r() * 3, 5 + r() * 2.5, a + Math.PI, r() < 0.3 ? 2 : 1);
+    .cyl(24, 1.6, 2, STONE, [mx + 8, my + 12, mz - 6], undefined, 10).cyl(0.6, 2.6, 2.6, STONE, [mx + 8, my + 19, mz - 6], undefined, 10)
+    .cyl(4, 0, 1.8, "#8a8f96", [mx + 8, my + 26, mz - 6], undefined, 10);
+  rect(grid, mx, mz, 13, 13, 0); grid.add({ x: mx + 8, z: mz - 6, r: 1.3 });
+  // evlər: kazarma divarlarının şimalında və cənubunda, qərbdə
+  for (let i = 0; i < 46; i++) {
+    const x = VILLAGE.x - 140 + r() * 210, z = (r() < 0.5 ? -1 : 1) * (110 + r() * 160);
+    if (Math.abs(z) > VALLEY - 25 || Math.hypot(x - mx, z - mz) < 18) continue;
+    house(x, z, 6 + r() * 3, 5 + r() * 2.5, r() * 6, r() < 0.3 ? 2 : 1);
   }
-  // daş hasar + quyu
-  k.cyl(1, 2.4, 2.6, STONE, [VILLAGE.x - 20, y0 + 0.2, VILLAGE.z - 30], undefined, 10); grid.add({ x: VILLAGE.x - 20, z: VILLAGE.z - 30, r: 1.4 });
-  for (const m of k.buildAll("village", vcMat(scene, "vcWorld", 0.05))) m.metadata = { solid: true };
+  for (let i = 0; i < 10; i++) { const x = C.x0 - 25 - r() * 70, z = (r() - 0.5) * 180; house(x, z, 6 + r() * 3, 5 + r() * 2, r() * 6); }
+  for (const m of k.buildAll("village", vcMat(scene, "vcWorld", 0.05))) { m.metadata = { solid: true }; m.freezeWorldMatrix(); }
   glow.build("villageGlow", glowMat(scene, "#ffb35a")).isPickable = false;
+}
+
+// --- 200 m otlaq və samanlıq: taya, rulon, taxta hasar ---
+function buildMeadow(scene: Scene, grid: Grid) {
+  const k = new Kit(scene), r = rng(41);
+  k.texMap = { [WOOD]: TM[WOOD] };
+  for (let i = 0; i < 34; i++) { // ot tayaları
+    const x = MEADOW.x0 + 15 + r() * (MEADOW.x1 - MEADOW.x0 - 30), z = (r() - 0.5) * 2 * (VALLEY - 40), y = heightAt(x, z);
+    if (Math.abs(z) < 14) continue; // yol
+    k.cyl(2.2, 3.6, 4.2, HAY, [x, y + 1.0, z], undefined, 10).cyl(2.2, 0.3, 3.6, "#b8964a", [x, y + 3.2, z], undefined, 10).cyl(4.6, 0.12, 0.12, WOOD, [x, y + 2.6, z], undefined, 5);
+    grid.add({ x, z, r: 2.1 });
+  }
+  for (let i = 0; i < 70; i++) { // rulon samanlar
+    const x = MEADOW.x0 + 10 + r() * (MEADOW.x1 - MEADOW.x0 - 20), z = (r() - 0.5) * 2 * (VALLEY - 40);
+    if (Math.abs(z) < 12) continue;
+    k.cyl(1.4, 1.5, 1.5, HAY, [x, heightAt(x, z) + 0.72, z], [0, r() * 3, Math.PI / 2], 10);
+  }
+  for (const x of [MEADOW.x0, MEADOW.x1]) for (let z = -VALLEY + 30; z < VALLEY - 30; z += 4) { // taxta hasarlar (ortada keçid)
+    if (Math.abs(z) < 16) continue;
+    const y = heightAt(x, z);
+    k.box(0.15, 1.3, 0.15, WOOD, [x, y + 0.6, z]).box(0.08, 0.12, 4, WOOD, [x, y + 0.9, z + 2]).box(0.08, 0.12, 4, WOOD, [x, y + 0.45, z + 2]);
+  }
+  for (const m of k.buildAll("meadow", vcMat(scene, "vcWorld", 0.05))) { m.isPickable = false; m.freezeWorldMatrix(); }
 }
 
 // --- düşmən kazarması: uzun bina, çadırlar, qum torbası halqası ---
@@ -196,20 +225,20 @@ function buildEnemyBarracks(scene: Scene, grid: Grid, x: number, z: number, i: n
   k.box(12, 4.6, 40, PLASTER, [x, y + 2.3, z]).roof(13.4, 41.4, 2.2, TILE, [x, y + 5.7, z], 0, 0.15);
   for (let j = -2; j <= 2; j++) k.box(0.12, 1, 1.5, "#2a2a2a", [x - 6.05, y + 2.6, z + j * 7]);
   rect(grid, x, z, 12, 40, 0);
-  for (let j = 0; j < 6; j++) { // çadırlar
+  for (let j = 0; j < 6; j++) {
     const tx = x + 14 + (j % 2) * 8, tz = z - 18 + Math.floor(j / 2) * 15, ty = heightAt(tx, tz);
     k.cyl(3, 0.2, 5.6, "#8a8468", [tx, ty + 1.5, tz], [0, r() * 0.3 + Math.PI / 4, 0], 4);
     grid.add({ x: tx, z: tz, r: 2.4 });
   }
-  for (let j = 0; j < 40; j++) { // qum torbası halqası
+  for (let j = 0; j < 40; j++) {
     const a = (j / 40) * Math.PI * 2, bx = x + Math.sin(a) * 30, bz = z + Math.cos(a) * 30;
-    if (Math.abs(Math.sin(a)) > 0.95) continue; // şərq-qərb keçidləri
+    if (Math.abs(Math.sin(a)) > 0.95) continue;
     k.box(1.4, 0.9, 0.6, BAG, [bx, heightAt(bx, bz) + 0.4, bz], [0, a + Math.PI / 2, 0]);
   }
-  for (const m of k.buildAll("enemyBarracks" + i, vcMat(scene, "vcWorld", 0.05))) m.metadata = { solid: true };
+  for (const m of k.buildAll("enemyBarracks" + i, vcMat(scene, "vcWorld", 0.05))) { m.metadata = { solid: true }; m.freezeWorldMatrix(); }
 }
 
-// --- 10 səngər xətti: ziqzaq, qabaqda qum torbalı parapet, arxada alçaq torpaq tökmə, dirəklər, taxta döşəmə; qabaqda tikanlı məftil ---
+// --- 10 səngər xətti: ziqzaq, qabaqda qum torbalı parapet, arxada torpaq tökmə, dirəklər, taxta döşəmə; qabaqda tikanlı məftil ---
 function buildTrenches(scene: Scene, quality: Quality): Post[][] {
   const k = new Kit(scene), bags = new Kit(scene), wire = new Kit(scene), r = rng(12);
   k.texMap = TM;
@@ -226,31 +255,29 @@ function buildTrenches(scene: Scene, quality: Quality): Post[][] {
     const posts: Post[] = [];
     for (let j = 0; j < pts.length - 1; j++) {
       const [ax, az] = pts[j], [bx, bz] = pts[j + 1];
-      const L = Math.hypot(bx - ax, bz - az), sgn = (bz - az) > 0 ? -1 : 1; // qabaq (qərb) tərəf
+      const L = Math.hypot(bx - ax, bz - az), sgn = (bz - az) > 0 ? -1 : 1;
       const f = wall(ax, az, bx, bz, 1.5 * sgn, 1.25, 1.0);
       wall(ax, az, bx, bz, -1.5 * sgn, 0.75, 1.2);
-      k.box(1.5, 0.06, L, "#5a4632", [(ax + bx) / 2, heightAt((ax + bx) / 2, (az + bz) / 2) + 0.04, (az + bz) / 2], [0, f.a, 0]); // taxta döşəmə
-      const n = Math.floor(L / (quality === "mid" ? 1.05 : 1.4));
-      for (let b = 0; b < n; b++) { // qum torbaları parapetin üstündə
+      k.box(1.5, 0.06, L, "#5a4632", [(ax + bx) / 2, heightAt((ax + bx) / 2, (az + bz) / 2) + 0.04, (az + bz) / 2], [0, f.a, 0]);
+      const n = Math.floor(L / (quality === "mid" ? 1.05 : 1.5));
+      for (let b = 0; b < n; b++) {
         const t = (b + 0.5) / n, px = f.mx + (bx - ax) * (t - 0.5), pz = f.mz + (bz - az) * (t - 0.5);
         bags.box(0.55, 0.3, 1.0, b % 3 ? BAG : "#8a7a58", [px, heightAt(px, pz) + 1.22, pz], [0, f.a + (r() - 0.5) * 0.25, 0]);
       }
-      for (let b = 1; b < L / 3.2; b++) { const t = b / Math.ceil(L / 3.2), px = ax + (bx - ax) * t + f.nx * 0.95 * sgn, pz = az + (bz - az) * t + f.nz * 0.95 * sgn;
+      if (quality === "mid") for (let b = 1; b < L / 3.2; b++) { const t = b / Math.ceil(L / 3.2), px = ax + (bx - ax) * t + f.nx * 0.95 * sgn, pz = az + (bz - az) * t + f.nz * 0.95 * sgn;
         k.box(0.14, 1.4, 0.14, WOOD, [px, heightAt(px, pz) + 0.6, pz]); }
       posts.push({ x: (ax + bx) / 2 + f.nx * 0.5 * sgn, z: (az + bz) / 2 + f.nz * 0.5 * sgn, trench: ti });
     }
     all.push(posts);
-    // tikanlı məftil: səngərdən 14 m qabaqda, arada keçidlər
-    const wx = tx - 14;
+    const wx = tx - 16; // tikanlı məftil, arada keçidlər
     for (let zz = -TRENCH_Z; zz <= TRENCH_Z; zz += 5) {
-      if (((zz + TRENCH_Z) / 5) % 14 < 2) continue; // keçid
+      if (((zz + TRENCH_Z) / 5) % 14 < 2) continue;
       const y = heightAt(wx, zz);
       wire.box(0.07, 1.3, 0.07, "#3a3026", [wx, y + 0.55, zz], [0, 0, 0.5]).box(0.07, 1.3, 0.07, "#3a3026", [wx, y + 0.55, zz], [0, 0, -0.5]);
       if (((zz + TRENCH_Z + 5) / 5) % 14 >= 2) for (const hy of [0.4, 0.85]) wire.box(0.025, 0.025, 5.1, "#555049", [wx, heightAt(wx, zz + 2.5) + hy, zz + 2.5], [0, 0, (r() - 0.5) * 0.3]);
     }
   });
-  // birləşdirici səngərlər (səngər içi yollar): iki yanında torpaq tökmə, altında taxta yol
-  for (const l of LINKS) {
+  for (const l of LINKS) { // birləşdirici səngərlər (səngər içi yollar)
     const steps = Math.ceil((l.x2 - l.x1) / 6);
     for (let s = 0; s < steps; s++) {
       const ax = l.x1 + ((l.x2 - l.x1) * s) / steps, bx = l.x1 + ((l.x2 - l.x1) * (s + 1)) / steps, bend = Math.sin(s * 0.9) * 1.2, bend2 = Math.sin((s + 1) * 0.9) * 1.2;
@@ -259,13 +286,13 @@ function buildTrenches(scene: Scene, quality: Quality): Post[][] {
       k.box(1.4, 0.06, 6.3, "#5a4632", [mx, heightAt(mx, mz) + 0.05, mz], [0, Math.atan2(bx - ax, bend2 - bend), 0]);
     }
   }
-  for (const m of k.buildAll("trench", vcMat(scene, "vcWorld", 0.05))) { m.isPickable = false; m.receiveShadows = true; }
-  bags.build("sandbags", vcMat(scene, "vcWorld", 0.05)).isPickable = false;
-  wire.build("wire", vcMat(scene, "vcGun", 0.4)).isPickable = false;
+  for (const m of k.buildAll("trench", vcMat(scene, "vcWorld", 0.05))) { m.isPickable = false; m.receiveShadows = true; m.freezeWorldMatrix(); }
+  const bm = bags.build("sandbags", vcMat(scene, "vcWorld", 0.05)); bm.isPickable = false; bm.freezeWorldMatrix();
+  const wm = wire.build("wire", vcMat(scene, "vcGun", 0.4)); wm.isPickable = false; wm.freezeWorldMatrix();
   return all;
 }
 
-// --- böyük təpəyə çıxan torpaq yol ---
+// --- böyük təpəyə çıxan ziqzaq daş yol ---
 function buildHillRoad(scene: Scene) {
   const left: Vector3[] = [], right: Vector3[] = [], uvs: Vector2[] = [];
   for (let i = 0; i < hillRoad.length; i++) {
@@ -277,10 +304,10 @@ function buildHillRoad(scene: Scene) {
   for (const side of [0, 1]) for (let i = 0; i < left.length; i++) uvs.push(new Vector2(side * 1.6, i * 1.4));
   const road = MeshBuilder.CreateRibbon("hillRoad", { pathArray: [left, right], uvs }, scene);
   const m = pbr(scene, "cobble"); m.zOffset = -2;
-  road.material = m; road.isPickable = false;
+  road.material = m; road.isPickable = false; road.freezeWorldMatrix();
 }
 
-// --- bitki: təpələrdə 2 m ot, ağaclar (palıd, sərv, şam), kolluqlar ---
+// --- bitki: təpələrdə 2 m ot, ağaclar (palıd, sərv, şam), kolluqlar; dağ yamaclarında meşə ---
 function grassClump(scene: Scene) {
   const t = new DynamicTexture("grassTexK", { width: 256, height: 256 }, scene, true), c = t.getContext() as CanvasRenderingContext2D, r = rng(4);
   c.clearRect(0, 0, 256, 256);
@@ -298,7 +325,7 @@ function grassClump(scene: Scene) {
   return clump;
 }
 function buildVegetation(scene: Scene, quality: Quality) {
-  const q = quality === "mid" ? 1.7 : 1, r = rng(17), mat = vcMat(scene, "vcTree", 0);
+  const q = quality === "mid" ? 1.6 : 1, r = rng(17), mat = vcMat(scene, "vcTree", 0);
   const tk = () => Object.assign(new Kit(scene), { texMap: { "#3b2a1c": ["bark", "#9a8a7a"] } as Record<string, [string, string]> });
   const oak = tk().cyl(3, 0.4, 0.6, "#3b2a1c", [0, 1.5, 0], undefined, 5).sph(5.5, "#3a5428", [0, 5, 0], [1, 0.8, 1], 4).sph(3.6, "#46602e", [1, 6.2, 0.6], undefined, 3).buildAll("oak", mat);
   const cypress = tk().cyl(2, 0.3, 0.4, "#3b2a1c", [0, 1, 0], undefined, 5).cyl(10, 0.2, 2.2, "#1f3a22", [0, 6.5, 0], undefined, 7).buildAll("cypress", mat);
@@ -307,55 +334,51 @@ function buildVegetation(scene: Scene, quality: Quality) {
   const bush = bushK.build("bush", mat); bush.isPickable = false;
   const clump = grassClump(scene);
   const trees: Matrix[][] = [[], [], []], bushes: Matrix[] = [], grass: Matrix[] = [];
+  const C = COMPOUND;
   const blocked = (x: number, z: number) => nearTrench(x, z) || onLink(x, z) || onRoad(x, z) || x > COAST - 35 ||
-    FLAT.some((f) => Math.hypot(x - f.x, z - f.z) < f.r - 5) || Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.r + 10 ||
-    HILLS.some((h) => Math.hypot(x - h.x, z - h.z) < (h.big ? 16 : 9)); // top meydançaları açıq
-  const hillW = (x: number, z: number) => ridgeAt(x, z) / 7 + HILLS.reduce((a, h) => a + Math.exp(-((x - h.x) ** 2 + (z - h.z) ** 2) / (2 * h.s * h.s)), 0);
-  // ot: təpələrdə sıx
-  for (let i = 0, n = 0; i < 90000 && n < 9000 * q; i++) {
-    const x = -140 + r() * 880, z = (r() - 0.5) * 620;
-    if (blocked(x, z) || ridgeAt(x, z) < 2.0) continue;
+    FLAT.slice(1).some((f) => Math.hypot(x - f.x, z - f.z) < f.r - 5) || (x > C.x0 - 120 && x < C.x1 + 5 && Math.abs(z) < 290) ||
+    HILLS.some((h) => Math.hypot(x - h.x, z - h.z) < (h.big ? 16 : 9)) || (Math.abs(z) < 12 && x < TRENCH_X[0]);
+  const hillW = (x: number, z: number) => ridgeAt(x, z) / 8 + HILLS.reduce((a, h) => a + Math.exp(-((x - h.x) ** 2 + (z - h.z) ** 2) / (2 * h.s * h.s)), 0);
+  for (let i = 0, n = 0; i < 90000 && n < 8000 * q; i++) { // ot: səngərlər arası təpələrdə sıx
+    const x = TRENCH_X[0] + r() * (TRENCH_X[9] - TRENCH_X[0]), z = (r() - 0.5) * 2 * VALLEY;
+    if (blocked(x, z) || ridgeAt(x, z) < 2.2) continue;
     const s = 0.8 + r() * 0.5; grass.push(M(x, heightAt(x, z) - 0.1, z, s, r() * 6, s * (0.85 + r() * 0.35))); n++;
   }
-  for (const h of HILLS) for (let i = 0, n = 0; i < 4000 && n < 550 * q; i++) { // top təpələrinin yamacları
-    const a = r() * Math.PI * 2, d = (0.25 + r() * 1.2) * h.s, x = h.x + Math.sin(a) * d, z = h.z + Math.cos(a) * d;
+  for (let i = 0, n = 0; i < 20000 && n < 1500 * q; i++) { // otlağın biçilməmiş zolaqları
+    const x = MEADOW.x0 + r() * (MEADOW.x1 - MEADOW.x0), z = (r() - 0.5) * 2 * (VALLEY - 20);
+    if (!kurtulusGrass(x, z) || blocked(x, z)) continue;
+    const s = 0.75 + r() * 0.4; grass.push(M(x, heightAt(x, z) - 0.1, z, s, r() * 6, s)); n++;
+  }
+  for (const h of HILLS) for (let i = 0, n = 0; i < 4000 && n < 380 * q; i++) {
+    const a = r() * Math.PI * 2, d = (0.25 + r() * 1.1) * h.s, x = h.x + Math.sin(a) * d, z = h.z + Math.cos(a) * d;
     if (blocked(x, z)) continue;
     const s = 0.8 + r() * 0.5; grass.push(M(x, heightAt(x, z) - 0.1, z, s, r() * 6, s)); n++;
   }
-  // ağaclar və kollar: təpələrdə çox, düzənlikdə seyrək, kəndin ətrafında bağlar
-  for (let i = 0, n = 0; i < 60000 && n < 1300 * q; i++) {
-    const x = -1250 + r() * 2030, z = (r() - 0.5) * 2300;
+  for (let i = 0, n = 0; i < 60000 && n < 1500 * q; i++) { // ağaclar: təpələrdə, dağ yamaclarında; döyüş sahəsində seyrək
+    const x = AREA.x0 + r() * (COAST - 40 - AREA.x0), z = (r() - 0.5) * 2 * 560;
     if (blocked(x, z)) continue;
-    const w = hillW(x, z), battle = x > -170 && x < COAST && Math.abs(z) < TRENCH_Z + 30;
-    if (r() > (battle ? w * 0.9 : 0.12 + w)) continue;
-    const s = 0.8 + r() * 0.6, t = w > 0.5 ? (r() < 0.6 ? 0 : 2) : r() < 0.4 ? 1 : r() < 0.7 ? 0 : 2;
-    trees[t].push(M(x, heightAt(x, z) - 0.3, z, s, r() * 6, s * (0.9 + r() * 0.3))); n++;
+    const slopeZone = Math.abs(z) > VALLEY - 10, w = hillW(x, z), h = heightAt(x, z);
+    if (h > 190 || r() > (slopeZone ? 0.75 : x > TRENCH_X[0] - 20 ? w * 0.8 : 0.1 + w)) continue;
+    const s = 0.8 + r() * 0.6, t = slopeZone ? (r() < 0.7 ? 2 : 0) : w > 0.5 ? (r() < 0.6 ? 0 : 2) : r() < 0.4 ? 1 : 0;
+    trees[t].push(M(x, h - 0.3, z, s, r() * 6, s * (0.9 + r() * 0.3))); n++;
   }
-  // uzaq kənd yerləri: meşə ləkələri (5×10 km meydanın hamısında)
-  const forestAt = (x: number, z: number) => Math.sin(x * 0.0021 + 0.4) * Math.cos(z * 0.0026 + 1.3) + 0.5 * Math.sin(x * 0.0057) * Math.sin(z * 0.0049 + 2);
-  for (let i = 0, n = 0; i < 80000 && n < 2600 * q; i++) {
-    const x = AREA.x0 + 60 + r() * (LAND_X1 - AREA.x0 - 200), z = AREA.z0 + 60 + r() * (AREA.z1 - AREA.z0 - 120);
-    if (x > -1300 && x < 900 && Math.abs(z) < 1300) continue; // döyüş sahəsi yuxarıda
-    if (forestAt(x, z) < 0.35 || heightAt(x, z) > 150) continue;
-    const s = 0.9 + r() * 0.7; trees[r() < 0.55 ? 2 : r() < 0.6 ? 0 : 1].push(M(x, heightAt(x, z) - 0.3, z, s, r() * 6, s * (0.9 + r() * 0.4))); n++;
-  }
-  for (let i = 0, n = 0; i < 60000 && n < 2600 * q; i++) {
-    const x = -400 + r() * 1180, z = (r() - 0.5) * 1100;
-    if (blocked(x, z) || r() > 0.15 + hillW(x, z)) continue;
+  for (let i = 0, n = 0; i < 60000 && n < 2200 * q; i++) {
+    const x = AREA.x0 + r() * (COAST - 40 - AREA.x0), z = (r() - 0.5) * 2 * (VALLEY + 60);
+    if (blocked(x, z) || r() > 0.12 + hillW(x, z)) continue;
     const s = 0.7 + r() * 0.8; bushes.push(M(x, heightAt(x, z) - 0.2, z, s, r() * 6, s)); n++;
   }
-  [oak, cypress, pine].forEach((ms, i) => ms.forEach((m) => scatter(m, trees[i])));
+  [oak, cypress, pine].forEach((ms, i) => ms.forEach((m) => { scatter(m, trees[i]); m.freezeWorldMatrix(); }));
   scatter(bush, bushes); scatter(clump, grass);
 }
 
-// --- mərmi çuxurları (döyüş sahəsi) ---
+// --- mərmi çuxurları ---
 function buildCraters(scene: Scene) {
   const d = MeshBuilder.CreateDisc("crater", { radius: 2.6, tessellation: 12 }, scene);
   d.rotation.x = Math.PI / 2; d.bakeCurrentTransformIntoVertices();
   const m = new StandardMaterial("craterMat", scene); m.diffuseColor = new Color3(0.16, 0.13, 0.1); m.specularColor = Color3.Black(); m.zOffset = -3;
   d.material = m;
   const r = rng(23), ms: Matrix[] = [];
-  for (let i = 0; i < 260; i++) {
+  for (let i = 0; i < 300; i++) {
     const x = TRENCH_X[0] - 40 + r() * (COAST - TRENCH_X[0]), z = (r() - 0.5) * (TRENCH_Z * 2 + 40);
     if (nearTrench(x, z, 4)) continue;
     const s = 0.5 + r() * 1.1; ms.push(M(x, heightAt(x, z) + 0.06, z, s, r() * 6, 1));

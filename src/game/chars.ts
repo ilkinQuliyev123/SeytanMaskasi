@@ -91,7 +91,7 @@ export class CharLib {
     const speed = 0.9 + Math.random() * 0.3, fps = e.ag.targetedAnimations[0]?.animation.framePerSecond ?? 30;
     const dur = (e.ag.to - e.ag.from) / fps / speed;
     e.m.setEnabled(true); e.ag.start(false, speed, e.ag.from, e.ag.to);
-    e.inst = e.m.createInstance(type + "_dying"); e.inst.scaling.set(-1, 1, 1);
+    e.inst = e.m.createInstance(type + "_dying"); e.inst.scaling.set(-1, 1, 1); e.inst.alwaysSelectAsActiveMesh = true;
     e.until = now + dur + 0.2;
     return { inst: e.inst, dur };
   }
@@ -111,6 +111,7 @@ export class CharLib {
     src.setEnabled(true);
     const inst = src.createInstance(type);
     inst.scaling.set(-1, 1, 1); // glTF sağ əlli → sol əlli güzgü (şablonun __root__ çevrilməsi kimi)
+    inst.alwaysSelectAsActiveMesh = true; // sərhəd qutusu güzgülü yerdədir — kəsilməsin (yalnız yaxındakılar görünür)
     return inst;
   }
 

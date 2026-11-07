@@ -13,7 +13,7 @@ import { CharLib, hat } from "./chars";
 import { Sfx } from "./audio";
 import { Kit, glowMat, vcMat } from "./kit";
 import { createHud, endScreen, pauseMenu } from "../ui/ui";
-import { AREA, buildKurtulus, COAST, ENEMY_BARRACKS, HILLS, OUR_BARRACKS, TRENCH_X } from "./kurtulus_world";
+import { AREA, buildKurtulus, COAST, ENEMY_BARRACKS, HILLS, OUR_BARRACKS, TRENCH_X, TRENCH_Z } from "./kurtulus_world";
 import type { Quality } from "./world";
 
 const TEST = location.search.includes("test") || location.search.includes("map=");
@@ -72,6 +72,18 @@ function shipModel(scene: Scene): Mesh {
   return m;
 }
 
+// --- desant qayığı: 10 əsgər (dəbilqələri görünür), avarlar ---
+function boatModel(scene: Scene): Mesh {
+  const k = new Kit(scene), W = "#4a3a2a";
+  k.box(2.8, 1.1, 8, W, [0, 0.2, 0]).box(1.98, 1.1, 1.98, W, [0, 0.2, 4], [0, Math.PI / 4, 0]).box(2.9, 0.12, 8.2, "#6a5238", [0, 0.8, 0]);
+  for (let i = 0; i < 10; i++) { const x = (i % 2 ? 0.6 : -0.6), z = -3 + Math.floor(i / 2) * 1.4; k.box(0.45, 0.6, 0.35, "#45525f", [x, 1.1, z]).sph(0.42, "#4a5148", [x, 1.55, z], [1, 0.55, 1], 6); }
+  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) k.box(2.6, 0.06, 0.12, "#8a6a48", [s * 2.2, 0.75, -2 + i * 2], [0, 0, s * 0.35]);
+  const m = k.build("boat", vcMat(scene, "vcShip", 0.3)); m.isVisible = false;
+  return m;
+}
+type Boat = { m: InstancedMesh; p: Vector3; to: Vector3; n: number; sunk: number };
+const boatHas = (b: Boat, p: Vector3) => { const dx = p.x - b.p.x, dz = p.z - b.p.z, a = -b.m.rotation.y, lx = dx * Math.cos(a) + dz * Math.sin(a), lz = -dx * Math.sin(a) + dz * Math.cos(a); return Math.abs(lx) < 2 && Math.abs(lz) < 5 && p.y < 3.5 && p.y > -1.5; };
+
 class Ship {
   hp = 100; crew = 50; sink = 0; cool = 20 + Math.random() * 25; bob = Math.random() * 6;
   mesh: InstancedMesh; smoke: ParticleSystem;
@@ -91,7 +103,7 @@ class Ship {
     const lx = dx * c + dz * s, lz = -dx * s + dz * c;
     return Math.abs(lx) < 6.5 && Math.abs(lz) < 41 && p.y < 16 && p.y > -4;
   }
-  damage(d: number) { this.hp = Math.max(0, this.hp - d); this.crew = Math.ceil((50 * this.hp) / 100); }
+  damage(d: number) { const b = this.hp; this.hp = Math.max(0, this.hp - d); this.crew = b > 0 ? Math.floor((this.crew * this.hp) / b) : 0; }
   update(dt: number) {
     this.bob += dt;
     if (this.alive) { this.mesh.position.y = Math.sin(this.bob * 0.7) * 0.25; this.mesh.rotation.z = Math.sin(this.bob * 0.5) * 0.02; this.mesh.rotation.x = Math.sin(this.bob * 0.43) * 0.008; return; }
@@ -179,8 +191,8 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   pipe.imageProcessing.contrast = 1.2; pipe.imageProcessing.exposure = 1.45;
   pipe.imageProcessing.vignetteEnabled = true; pipe.imageProcessing.vignetteWeight = 2.2;
   pipe.bloomEnabled = !low; pipe.bloomThreshold = 0.65; pipe.bloomWeight = 0.5;
-  pipe.sharpenEnabled = true; pipe.sharpen.edgeAmount = 0.3;
-  pipe.grainEnabled = true; pipe.grain.intensity = 5; pipe.grain.animated = true;
+  pipe.sharpenEnabled = !low; pipe.sharpen.edgeAmount = 0.3; // zəif kartda kəskinlik və dənə söndürülür (hər biri tam ekran keçidi)
+  pipe.grainEnabled = !low; pipe.grain.intensity = 5; pipe.grain.animated = true;
   if (!low) new GlowLayer("glow", scene, { blurKernelSize: 32 }).intensity = 0.6;
   const lamp = new PointLight("lamp", Vector3.Zero(), scene); lamp.diffuse = new Color3(1, 0.62, 0.3); lamp.specular = Color3.Black(); lamp.intensity = 1.2; lamp.range = 22;
   const fx = new Fx(scene, low);
@@ -191,7 +203,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     const row = Math.floor(i / 10), col = i % 10, x = OUR_BARRACKS.x + 12 + row * 2.2, z = OUR_BARRACKS.z - 10 + col * 2.2;
     return new Unit(scene, UNITS.turk, "mauser", new Vector3(x, 0, z), new Vector3(x, 0, z));
   });
-  player.bounds = { x0: AREA.x0 + 60, x1: COAST + 12, z0: AREA.z0 + 60, z1: AREA.z1 - 60 }; // 10×5 km meydan; dənizə girmək olmur
+  player.bounds = { x0: AREA.x0 + 20, x1: COAST + 12, z0: AREA.z0, z1: AREA.z1 }; // meydan: kənddən dənizə, en — iki dağ arası
   player.pos.set(OUR_BARRACKS.x + 9, 0, OUR_BARRACKS.z); player.yaw = Math.PI / 2; player.pitch = 0.05;
   { const at = new URLSearchParams(location.search).get("at"); // yoxlama: ?at=coast | hill | trench
     if (at === "coast") { player.pos.set(COAST - 25, 0, 40); player.yaw = Math.PI / 2 + 0.25; }
@@ -212,9 +224,12 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
       const u = new Unit(scene, UNITS.isgalci, "mauser", new Vector3(x, 0, z), new Vector3(b.x + 18, 0, b.z)); u.fort = "b" + bi; enemies.push(u);
     }
   });
+  const landTotal = enemies.length;
   // donanma: 9 gəmi sahildən 250–500 m aralıda, sahilə paralel
   const shipBase = shipModel(scene), smokeTex = puff(scene, "shipSmokeT", "rgba(255,255,255,1)", "rgba(255,255,255,0)");
-  const ships = Array.from({ length: 9 }, (_, i) => new Ship(scene, shipBase, new Vector3(COAST + 260 + (i % 3) * 120 + Math.random() * 40, 0, -560 + i * 140), (i % 2 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.15, smokeTex, low));
+  const ships = Array.from({ length: 9 }, (_, i) => new Ship(scene, shipBase, new Vector3(COAST + 230 + Math.floor(i / 3) * 125 + Math.random() * 20, 0, -200 + (i % 3) * 200 + (Math.random() - 0.5) * 30), (i % 2 ? Math.PI : 0) + (Math.random() - 0.5) * 0.2, smokeTex, low));
+  const boatBase = boatModel(scene), boats: Boat[] = [];
+  let landing = false;
   // təpə topları
   const guns = HILLS.map((h) => { const y = heightAt(h.x, h.z); return new HillGun(scene, new Vector3(h.x, y - 0.2, h.z), !!h.big); });
 
@@ -233,8 +248,9 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   };
   /** T saniyədə b nöqtəsinə düşən başlanğıc sürəti */
   const lob = (a: Vector3, b: Vector3, T: number) => new Vector3((b.x - a.x) / T, (b.y - a.y + 0.5 * G * T * T) / T, (b.z - a.z) / T);
+  const sinkBoat = (b: Boat) => { b.sunk = 0.01; if (b.n) say(`Qayıq batdı! (${b.n} düşmən)`, 2); b.n = 0; };
   const explode = (s: Shell, at: Vector3, water: boolean) => {
-    if (water) fx.water(at, s.big ? 1.6 : 1); else fx.boom(at, s.big ? 1.6 : 1);
+    if (water) { fx.water(at, s.big ? 1.6 : 1); for (const b of boats) if (!b.sunk && b.n && Vector3.Distance(b.p, at) < s.r + 3) sinkBoat(b); } else fx.boom(at, s.big ? 1.6 : 1);
     sfx.cannon(Vector3.Distance(at, player.pos) * 0.8);
     const foes: Target[] = s.enemy ? [player, ...allies] : enemies;
     for (const t of foes) { const d = Vector3.Distance(t.pos, at); if (t.alive && d < s.r) t.hit(s.dmg * (1 - d / (s.r + 1)), at); }
@@ -250,6 +266,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
         else if (Math.random() < 0.4) say(`Gəmiyə dəydi! Dənizçi: ${sh.crew}`, 2);
         break;
       }
+      if (!done && !s.enemy) for (const b of boats) if (!b.sunk && boatHas(b, s.p)) { sinkBoat(b); fx.boom(s.p, 1); done = true; break; }
       if (!done && s.p.y < 0 && s.p.x > COAST - 15) { explode(s, s.p, true); done = true; }
       else if (!done && s.p.y < heightAt(s.p.x, s.p.z)) { explode(s, s.p, false); done = true; }
       if (done || s.life <= 0) { s.m.dispose(); s.ring?.dispose(); shells.splice(i, 1); }
@@ -270,7 +287,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
 
   // --- idarəetmə ---
   let paused = false, ended = false, hudT = 0, slowT = 0, frame = 0, msgT = 10, gameTime = 0, battle = false, order: "follow" | "attack" = "follow";
-  let msg = "Sübh çağıdır. Kazarmadan çıx, şərqdəki 10 səngər xəttini sahilə qədər təmizlə. G — 3 əsgəri ən yaxın topa göndər (toplar gəmiləri vurur), F — hücum/izlə, E — topa keç.";
+  let msg = "Sübh çağıdır. Kazarmadan çıx, otlaqdan keç, 10 səngəri sahilə qədər təmizlə. Son səngərə çatanda gəmilərdən qayıqla düşmən çıxacaq. G — 3 əsgəri topa göndər · E — topa keç (hara nişan alsan ora düşür) · F — hücum/izlə.";
   function say(m: string, t = 3) { msg = m; msgT = t; }
   let manning: HillGun | null = null, aimRing: Mesh | null = null;
   const nearestGun = (p: Vector3, max: number) => guns.map((g) => ({ g, d: Vector3.Distance(g.pos, p) })).filter((x) => x.d < max).sort((a, b) => a.d - b.d)[0]?.g ?? null;
@@ -307,27 +324,34 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   const hudRebuild = () => { hudRef.destroy(); hudRef = createHud("Gəmilər"); };
   let ambT = 0, stepT = 0, lastAmmo = -1, lastCur = -1, seaT = 0;
 
-  /** topda: kamera lülənin arxasında, siçan lüləni fırladır; düşəcəyi yer sarı halqa ilə göstərilir */
-  const gunControl = (dt: number) => {
-    const g = manning!;
-    g.yaw = player.yaw; g.elev = Math.max(-0.08, Math.min(0.75, -player.pitch)); g.apply();
-    const fwd = new Vector3(Math.sin(g.yaw), 0, Math.cos(g.yaw)), zoom = player.aiming;
-    const cam = g.pos.add(new Vector3(0, g.big ? 6.5 : 2.6, 0)).add(fwd.scale(g.big ? -10 : -4.5));
-    player.camera.position.copyFrom(cam);
-    player.camera.fov += ((zoom ? 0.3 : 0.95) - player.camera.fov) * Math.min(1, dt * 10);
-    player.camera.setTarget(cam.add(g.dir.scale(60)));
-    // trayektoriya: düşmə nöqtəsi
-    const p = g.muzzle, v = g.dir.scale(g.speed);
-    let hit: Vector3 | null = null;
-    for (let t = 0; t < 40; t += 0.08) {
-      v.y -= G * 0.08; p.addInPlace(v.scale(0.08));
-      if ((p.y < 0 && p.x > COAST - 15) || p.y < heightAt(p.x, p.z) || ships.some((s) => s.alive && s.contains(p))) { hit = p; break; }
+  /** ekranın mərkəzindən şüa: dəniz, yer, gəmi və ya qayığa dəydiyi nöqtə */
+  const aimPoint = (from: Vector3, dir: Vector3, range: number) => {
+    const p = from.clone();
+    for (let t = 0; t < range; t += 2) {
+      p.addInPlace(dir.scale(2));
+      if ((p.y < 0 && p.x > COAST - 15) || p.y < heightAt(p.x, p.z) || ships.some((s) => s.alive && s.contains(p)) || boats.some((b) => !b.sunk && boatHas(b, p))) return p;
     }
-    if (!aimRing) { aimRing = MeshBuilder.CreateTorus("aimRing", { diameter: 14, thickness: 0.8, tessellation: 24 }, scene); aimRing.material = glowMat(scene, "#ffd84a", "aimGlow"); aimRing.isPickable = false; }
-    aimRing.setEnabled(!!hit); if (hit) aimRing.position.set(hit.x, Math.max(0.3, hit.y + 0.3), hit.z);
-    g.cool -= dt;
-    if (player.shooting && document.pointerLockElement === canvas && g.cool <= 0) { g.cool = g.reload * 0.6; fire(g.muzzle, g.dir.scale(g.speed), g.big ? 140 : 90, g.big ? 9 : 6, false, g.big, null); }
+    return p;
   };
+  /** topda: kamera topun arxasında, siçanla bax; mərmi düz nişan nöqtəsinə düşür (lülə özü lazımi bucağa qalxır) */
+  const gunControl = (dt: number) => {
+    const g = manning!, zoom = player.aiming;
+    const look = new Vector3(Math.sin(player.yaw) * Math.cos(player.pitch), -Math.sin(player.pitch), Math.cos(player.yaw) * Math.cos(player.pitch));
+    const cam = g.pos.add(new Vector3(0, g.big ? 7 : 3, 0)).add(new Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)).scale(g.big ? -11 : -5));
+    player.camera.position.copyFrom(cam);
+    player.camera.fov += ((zoom ? 0.22 : 0.95) - player.camera.fov) * Math.min(1, dt * 10);
+    player.camera.setTarget(cam.add(look.scale(60)));
+    const aim = aimPoint(cam, look, g.range);
+    const d = Math.hypot(aim.x - g.pos.x, aim.z - g.pos.z), T = 1.2 + d / (g.big ? 520 : 400);
+    const v = lob(g.muzzle, aim, T);
+    g.yaw = Math.atan2(v.x, v.z); g.elev = Math.max(-0.1, Math.atan2(v.y, Math.hypot(v.x, v.z))); g.apply();
+    if (!aimRing) { aimRing = MeshBuilder.CreateTorus("aimRing", { diameter: 10, thickness: 0.6, tessellation: 24 }, scene); aimRing.material = glowMat(scene, "#ffd84a", "aimGlow"); aimRing.isPickable = false; }
+    aimRing.setEnabled(true); aimRing.position.set(aim.x, Math.max(0.3, aim.y + 0.3), aim.z); aimRing.scaling.setAll(Math.max(1, d / 300));
+    g.cool -= dt;
+    if (player.shooting && document.pointerLockElement === canvas && g.cool <= 0) { g.cool = g.reload * 0.6; fire(g.muzzle, lob(g.muzzle, aim, T), g.big ? 140 : 90, g.big ? 9 : 6, false, g.big, null); }
+  };
+  let resT = 2; const minScale = low ? 1 : 0.9;
+  scene.autoClear = false; // səma günbəzi hər yeri örtür
 
   scene.onBeforeRenderObservable.add(() => {
     if (paused || ended) return;
@@ -339,7 +363,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     const pp = player.pos;
     hitMark.style.opacity = player.hitFlash > 0 ? "1" : "0"; player.hitFlash -= dt;
     // günəş: kameradan 5200 m, sahil istiqamətində; yavaş qalxır
-    const rise = (sky.hour - 6.05) * 900;
+    const rise = 20 + (sky.hour - 6.05) * 900;
     sunDisc.position.copyFrom(player.camera.position.add(sunDir.scale(5200))); sunDisc.position.y = rise;
     halo.position.copyFrom(player.camera.position.add(sunDir.scale(5300))); halo.position.y = rise + 40;
     sea.tex.uOffset += dt * 0.004; sea.tex.vOffset += dt * 0.0025;
@@ -358,7 +382,8 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
       for (const a of allies) a.setLod(Math.hypot(a.pos.x - pp.x, a.pos.z - pp.z) < 90, true);
       lib?.tick(); lib?.tickDying(performance.now() / 1000);
       anchors.sort((a, b) => Vector3.DistanceSquared(a, pp) - Vector3.DistanceSquared(b, pp)); if (anchors[0]) lamp.position.copyFrom(anchors[0]);
-      if (!battle && (pp.x > TRENCH_X[0] - 260 || enemies.some((e) => e.alive && e.target))) { battle = true; say("Düşmən bizi gördü! Donanma sahilə atəş açır — qırmızı halqadan qaç!", 4); }
+      if (!battle && (pp.x > TRENCH_X[0] - 150 || enemies.some((e) => e.alive && e.target))) { battle = true; say("Döyüş başladı! Toplara heyət göndər (G) — gəmiləri vursunlar.", 4); }
+      if (!landing && pp.x > TRENCH_X[8] - 60) { landing = true; ships.forEach((s) => (s.cool = Math.random() * 10)); say("Gəmilərdən qayıqlar endirilir! Sahilə çıxanları vur, toplarla qayıqları batır!", 5); }
     }
     allies.forEach((u, i) => u.update(dt, { foes: enemies, night: false, fog: 0, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked }));
     const foes: Target[] = [player, ...allies];
@@ -382,36 +407,56 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
       const crew = crewOf(g).filter((a) => Vector3.Distance(a.pos, g.pos) < 10).length + (Vector3.Distance(pp, g.pos) < 9 ? 1 : 0);
       if (!crew || !battle) continue;
       if ((g.cool -= dt * Math.min(1.5, 0.6 + crew * 0.3)) > 0) continue;
-      const tgt = ships.filter((s) => s.alive && Vector3.Distance(s.pos, g.pos) < g.range).sort((a, b) => Vector3.Distance(a.pos, g.pos) - Vector3.Distance(b.pos, g.pos))[0];
-      if (!tgt) continue;
-      const d = Vector3.Distance(tgt.pos, g.pos), miss = Math.random() > (g.big ? 0.62 : 0.4), T = 2.2 + d / (g.big ? 420 : 320);
-      const aim = tgt.pos.add(new Vector3(0, 4, 0)).add(miss ? new Vector3((Math.random() - 0.5) * 70, -4, (Math.random() - 0.5) * 70) : Vector3.Zero());
+      const boat = boats.filter((b) => !b.sunk && b.n > 0 && Vector3.Distance(b.p, g.pos) < g.range).sort((a, b) => a.p.x - b.p.x)[0]; // əvvəl sahilə yaxınlaşan qayıq
+      const tgt = boat ? null : ships.filter((s) => s.alive && Vector3.Distance(s.pos, g.pos) < g.range).sort((a, b) => Vector3.Distance(a.pos, g.pos) - Vector3.Distance(b.pos, g.pos))[0];
+      if (!boat && !tgt) continue;
+      const tp = boat ? boat.p.add(boat.to.subtract(boat.p).normalize().scale(5.5 * 3)) : tgt!.pos.add(new Vector3(0, 4, 0)); // qayığın 3 s sonrakı yeri
+      const d = Vector3.Distance(tp, g.pos), miss = Math.random() > (g.big ? 0.88 : 0.7), T = 1.2 + d / (g.big ? 520 : 400);
+      const aim = tp.add(miss ? new Vector3((Math.random() - 0.5) * 30, 0, (Math.random() - 0.5) * 30) : Vector3.Zero());
       g.yaw = Math.atan2(aim.x - g.pos.x, aim.z - g.pos.z); g.elev = Math.min(0.7, Math.max(0.03, Math.atan2(G * T * T * 0.5, d))); g.apply();
       fire(g.muzzle, lob(g.muzzle, aim, T), 0, 6, false, g.big, null);
       g.cool = g.reload + Math.random() * 3;
     }
-    // donanma: döyüş başlayandan sonra sahildəki əsgərlərə atəş (qırmızı halqa — xəbərdarlıq)
+    // donanma atəş açmır: son səngərə yaxınlaşanda gəmilərdəki əsgərlər qayıqlarla sahilə çıxır
     for (const s of ships) {
       s.update(dt);
-      if (!s.alive || !battle || (s.cool -= dt) > 0) continue;
-      const near = foes.filter((f) => f.alive && Vector3.Distance(f.pos, s.pos) < 1500);
-      if (!near.length) { s.cool = 5; continue; }
-      const t = Math.random() < 0.3 && near.includes(player) ? player : near[Math.floor(Math.random() * near.length)];
-      const aim = t.pos.add(new Vector3((Math.random() - 0.5) * 26, 0, (Math.random() - 0.5) * 26)); aim.y = heightAt(aim.x, aim.z);
-      const from = s.pos.add(new Vector3(0, 7, 0)), d = Vector3.Distance(from, aim), T = 3.2 + d / 330;
-      fire(from, lob(from, aim, T), 85, 8, true, true, aim);
-      s.cool = 24 + Math.random() * 18;
+      if (!s.alive || !landing || s.crew <= 0 || (s.cool -= dt) > 0) continue;
+      if (boats.filter((b) => !b.sunk && b.n > 0).length >= 7) { s.cool = 3; continue; }
+      const n = Math.min(10, s.crew); s.crew -= n; s.cool = 22 + Math.random() * 10;
+      const from = new Vector3(s.pos.x - 9, 0, s.pos.z + (Math.random() - 0.5) * 40);
+      const to = new Vector3(COAST - 6, 0, Math.max(-TRENCH_Z, Math.min(TRENCH_Z, s.pos.z + (Math.random() - 0.5) * 140)));
+      const m = boatBase.createInstance("boatI"); m.position.copyFrom(from); m.rotation.y = Math.atan2(to.x - from.x, to.z - from.z); m.isPickable = false;
+      boats.push({ m, p: from, to, n, sunk: 0 });
+    }
+    for (let i = boats.length - 1; i >= 0; i--) {
+      const b = boats[i];
+      if (b.sunk > 0) { b.sunk += dt; b.m.position.y = -b.sunk * 0.7; b.m.rotation.z = b.sunk * 0.25; if (b.sunk > 5) { b.m.dispose(); boats.splice(i, 1); } continue; }
+      if (b.n === 0) continue; // sahildə boş qayıq
+      const d = b.to.subtract(b.p), L = d.length();
+      if (L < 2) { // sahilə çıxdılar: hücuma keçirlər
+        for (let j = 0; j < b.n; j++) {
+          const x = b.to.x - 4 - Math.random() * 3, z = b.to.z + (j - b.n / 2) * 1.5;
+          const u = new Unit(scene, UNITS.isgalci, "mauser", new Vector3(x, 0, z), new Vector3(x - 40, 0, z)); u.fort = "sea"; u.alert = new Vector3(pp.x, 0, pp.z); enemies.push(u);
+        }
+        say(`${b.n} düşmən sahilə çıxdı!`, 2); b.n = 0; b.m.position.y = 0.2; continue;
+      }
+      b.p.addInPlace(d.scale(Math.min(L, 5.5 * dt) / L)); b.m.position.set(b.p.x, Math.sin(gameTime * 2 + i) * 0.15, b.p.z);
     }
     updateShells(dt);
     for (const t of tracers) if ((t.t -= dt) <= 0) t.l.isVisible = false;
     msgT -= dt;
-    const landLeft = enemies.filter((e) => e.alive).length, crewLeft = ships.reduce((a, s) => a + s.crew, 0), sunk = ships.filter((s) => !s.alive).length;
-    if ((!landLeft && sunk === ships.length) || !player.alive) return finish(player.alive);
+    const landLeft = enemies.filter((e) => e.alive).length, crewLeft = ships.reduce((a, s) => a + s.crew, 0) + boats.reduce((a, b) => a + b.n, 0), sunk = ships.filter((s) => !s.alive).length;
+    if ((!landLeft && !crewLeft) || !player.alive) return finish(player.alive);
+    if (!TEST && (resT -= dt) <= 0) { // FPS-ə görə ekran ölçüsü: zəif anda kiçilir, güc çatanda böyüyür
+      resT = 1; const f = engine.getFps(); let sc = engine.getHardwareScalingLevel();
+      if (f < 42 && sc < 2.4) sc += 0.15; else if (f > 57 && sc > minScale) sc = Math.max(minScale, sc - 0.05);
+      engine.setHardwareScalingLevel(sc);
+    }
     if ((hudT -= dt) <= 0) {
       hudT = 0.1;
       const g = player.gun, mg = manning;
       hudRef.update({ hp: player.hp, maxHp: player.maxHp, weapon: mg ? (mg.big ? "Böyük sahil topu" : "Sahə topu") : g.w.name, ammo: mg ? (mg.cool > 0 ? 0 : 1) : g.ammo, mag: mg ? 1 : g.w.mag, reloading: mg ? mg.cool > 0 : g.reloading > 0,
-        hour: sky.hour, weather: "sübh", enemiesLeft: landLeft + crewLeft, enemiesTotal: enemies.length + 450, allies: allies.filter((a) => a.alive).length,
+        hour: sky.hour, weather: "sübh", enemiesLeft: landLeft + crewLeft, enemiesTotal: landTotal + 450, allies: allies.filter((a) => a.alive).length,
         form: null, cooldowns: [], fps: engine.getFps(), msg: msgT > 0 ? msg : "", forts: { cleared: sunk, total: ships.length }, scope: mg ? 0 : player.scope });
     }
   });
