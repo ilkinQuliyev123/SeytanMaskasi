@@ -211,6 +211,30 @@ export class Sfx {
     const ng = c.createGain(); ng.gain.value = 0.8; s.connect(bp); bp.connect(ng); ng.connect(g); s.stop(t + dur);
   }
 
+  /** motosiklet mühərriki: speed null — susur; sürətə görə dövr (iki mişar dalğa + aşağı keçid filtri) */
+  private eng: { o1: OscillatorNode; o2: OscillatorNode; g: GainNode; lp: BiquadFilterNode } | null = null;
+  engine(speed: number | null): void {
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime;
+    if (!this.eng) {
+      const o1 = c.createOscillator(), o2 = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter();
+      o1.type = "sawtooth"; o2.type = "square"; lp.type = "lowpass"; lp.frequency.value = 600; g.gain.value = 0;
+      o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(this.sfxBus); o1.start(); o2.start();
+      this.eng = { o1, o2, g, lp };
+    }
+    const e = this.eng, v = Math.abs(speed ?? 0), rpm = 38 + v * 3.2 + Math.sin(t * 9) * 2;
+    e.o1.frequency.setTargetAtTime(rpm, t, 0.08); e.o2.frequency.setTargetAtTime(rpm * 0.5, t, 0.08);
+    e.lp.frequency.setTargetAtTime(400 + v * 40, t, 0.1);
+    e.g.gain.setTargetAtTime(speed === null ? 0 : 0.07 + Math.min(0.08, v * 0.003), t, 0.15);
+  }
+
+  /** əjdaha alovu: gurultulu, xışıltılı alov axını */
+  flame(dist = 0): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, o = this.out(dist, 0.9);
+    this.burst(o, t, 0.5, 900, "bandpass", 0.7, 0.6, 400); this.burst(o, t, 0.45, 180, "lowpass", 0.8, 0.7, 90);
+  }
+
   dispose(): void {
     if (this.ctx) void this.ctx.close();
     this.ctx = null;

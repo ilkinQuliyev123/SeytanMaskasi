@@ -14,6 +14,7 @@ import { CharLib } from "./chars";
 import { setChars } from "./units";
 import { Sfx } from "./audio";
 import { Dragon } from "./dragon";
+import { Moto } from "./moto";
 import { T } from "../i18n/az";
 import { createHud, endScreen, pauseMenu } from "../ui/ui";
 import { createWheel } from "../ui/wheel";
@@ -57,7 +58,7 @@ function garrison(scene: Scene, f: FortLayout, fort: Fort, n: number) {
     else { const [t, w] = foot(), s = pick(spots); mk(t, w, s.x + (Math.random() - 0.5) * 4, s.z + (Math.random() - 0.5) * 4); } // yerində/yaxında gəzir
   }
   // mülkilər: küçələrdə gəzən kəndlilər (döyüşmür, güllə dəymir)
-  const civs = Array.from({ length: 70 }, (_, i) => {
+  const civs = Array.from({ length: TEST ? 8 : 70 }, (_, i) => {
     const c = new Unit(scene, UNITS[i % 2 ? "mulki" : "mulki2"], "", new Vector3(0, 0, 0), new Vector3(0, 0, 0));
     c.setRoute(i % 3 ? f.patrol : Math.random() < 0.5 ? roamA : roamB);
     return c;
@@ -76,7 +77,8 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   // animasiyalı personajlar: yüklənmirsə sadə modellərlə davam edir
   const lib = await CharLib.load(scene).catch((e) => { console.warn("personajlar yüklənmədi", e); return null; });
   setChars(lib);
-  if (lib) try { lib.warm(["samurai", "ninja", "yeniceri", "ottoman", "okcu", "mulki", "mulki2", "koylu"]); } catch { setChars(null); }
+  if (lib) try { lib.warm(["samurai", "ninja", "yeniceri", "ottoman", "okcu", "mulki", "mulki2", "koylu"]); lib.warmDying(["yeniceri", "ottoman", "okcu"], quality === "low" ? 3 : 4); lib.warmDying(["samurai", "ninja"], 2); } catch { setChars(null); }
+  Unit.falling = [];
   if (lib) player.useChar(lib);
   const sky = new Sky(scene, player.camera, quality, map.startHour ?? 9);
   const { grid, anchors } = buildWorld(scene, quality);
@@ -135,7 +137,9 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     ...spawn(scene, "ninja", setup.ninjaWeapon, setup.ninja, DOJO.x, DOJO.z, 6)];
   if (at) for (const a of allies) { a.pos.x += player.pos.x; a.pos.z += player.pos.z - 4; }
   let order: "follow" | "attack" = "follow";
-  const dragon = new Dragon(scene, 18, 6); // həyətdə gözləyir
+  const dragon = new Dragon(scene, 18, 6, quality === "low" ? 0.5 : 1); // həyətdə yerdə gözləyir (E ilə min)
+  const moto = new Moto(scene, player.pos.x + 3, player.pos.z + 3, 0.4); // oyunçunun yanında
+  let nearHint = "", flameT = 0;
   let dragonWarn = true;
   Unit.onDeath = (u) => { // səssiz öldürmədə də yaxındakı 3 yoldaş (25 m) meyitə baxmağa gəlir
     if (u.ally || u.type.civ) return;
@@ -186,15 +190,40 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   };
   const onWheelMove = (e: MouseEvent) => { if (wheel.isOpen()) wheel.move(e.movementX, e.movementY); };
   addEventListener("keydown", onWheelKey); addEventListener("keyup", onWheelKey); addEventListener("mousemove", onWheelMove);
+  // E: motosiklet / əjdaha — min və düş (yaxında heç biri yoxdursa saat çevrilməsi işləyir)
+  const dismountDragon = () => {
+    const f = dragon.forward, side = new Vector3(f.z, 0, -f.x);
+    player.riding = null; dragon.rider = false; player.flyH = 0; player.jumpH = 0; player.jumpV = 0;
+    player.pos.copyFrom(dragon.pos.add(side.scale(4.5))); player.pos.y = heightAt(player.pos.x, player.pos.z);
+  };
+  player.interact = () => {
+    if (paused || ended) return false;
+    if (player.moto) {
+      if (moto.kmh > 25) { say("Əvvəlcə yavaşla (S)", 2); return true; }
+      const side = new Vector3(moto.forward.z, 0, -moto.forward.x);
+      player.moto = null; moto.rider = false; player.pos.copyFrom(moto.pos.add(side.scale(1.3))); player.pos.y = heightAt(player.pos.x, player.pos.z);
+      say("Motosikletdən düşdün", 2); return true;
+    }
+    if (player.riding) {
+      if (!dragon.grounded && dragon.altitude > 2.5) { say("Əvvəlcə yerə en (Ctrl)", 2); return true; }
+      dismountDragon(); say("Əjdahadan düşdün", 2); return true;
+    }
+    if (player.watch.active) return false;
+    if (Vector3.Distance(player.pos, moto.pos) < 3.2) {
+      player.moto = moto; moto.rider = true; player.yaw = moto.yaw;
+      say("Motosiklet: W qaz · S əyləc · A/D sükan · Shift nitro · Sol klik atəş · E düş", 5); return true;
+    }
+    if (Math.hypot(player.pos.x - dragon.pos.x, player.pos.z - dragon.pos.z) < 7.5 && dragon.alive && dragon.grounded) {
+      player.riding = dragon; dragon.rider = true; dragon.summon = null; player.yaw = dragon.yaw;
+      say("Əjdaha: W/S yeri · Space uç · Ctrl en · Shift sürət · Sol klik alov · 25 m-dəki düşmənə özü alov püskürür · E düş", 6); return true;
+    }
+    return false;
+  };
   const onKey = (e: KeyboardEvent) => {
-    if (e.code === "KeyG" && !paused) { // əjdahaya min / düş
-      if (player.riding) {
-        player.riding = null; dragon.rider = false; player.flyH = 0; player.jumpH = 0; player.jumpV = 0;
-        player.pos.x += 4; player.pos.y = heightAt(player.pos.x, player.pos.z); dragon.summon = player.pos.clone(); dragon.summonOnly = true;
-        say("Əjdahadan düşdün", 2);
-      }
+    if (e.code === "KeyG" && !paused) { // əjdahanı yanına çağır (uçub gəlir və yerə enir)
+      if (player.riding) say("Əjdahadan düşmək üçün E", 2);
       else if (!dragon.alive) say("Əjdaha yaralıdır, hələ uça bilmir", 2);
-      else { dragon.summon = player.pos.clone(); say("Əjdaha gəlir…", 2); }
+      else { dragon.summon = player.pos.clone(); say("Əjdaha gəlir… yanına enəndə E ilə min", 3); }
     }
     if (e.code === "KeyF" && !paused) {
       order = order === "follow" ? "attack" : "follow";
@@ -230,7 +259,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     // səslər: fon, addımlar, atəş, doldurma, çevrilmə
     if ((ambT -= dt) <= 0) { ambT = 1; sfx.ambience(sky.isNight, sky.weather === "yağış" ? 0.8 : sky.weather === "duman" ? 0.2 : 0.45); }
     const g0 = player.gun, moving = player.pressed("KeyW") || player.pressed("KeyA") || player.pressed("KeyS") || player.pressed("KeyD");
-    if (moving && player.jumpH <= 0 && (stepT -= dt) <= 0) { const run = player.pressed("ShiftLeft"); stepT = run ? 0.3 : 0.45; sfx.step(run); }
+    if (moving && !player.moto && !player.riding && player.jumpH <= 0 && (stepT -= dt) <= 0) { const run = player.pressed("ShiftLeft"); stepT = run ? 0.3 : 0.45; sfx.step(run); }
     if (player.cur === lastCur && g0.ammo < lastAmmo) sfx.shot(g0.w.id as "m16");
     if (player.cur === lastCur && g0.reloading > 0 && g0.ammo === 0 && lastAmmo !== 0) sfx.reload(g0.w.id);
     lastAmmo = g0.ammo; lastCur = player.cur;
@@ -238,7 +267,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     if ((slowT -= dt) <= 0) { // yarım saniyədə bir: məsafələr, görünmə, işıqlar, həyəcan
       slowT = 0.5;
       for (const e of enemies) { e.dist = Math.hypot(e.pos.x - pp.x, e.pos.z - pp.z); e.setLod(e.dist < 90, e.dist < 320); }
-      lib?.tick();
+      lib?.tick(); lib?.tickDying(performance.now() / 1000);
       for (const a of allies) a.setLod(Math.hypot(a.pos.x - pp.x, a.pos.z - pp.z) < 90, true);
       anchors.sort((a, b) => Vector3.DistanceSquared(a, pp) - Vector3.DistanceSquared(b, pp));
       lamps.forEach((l, i) => anchors[i] && l.position.copyFrom(anchors[i]));
@@ -250,14 +279,17 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     const night = sky.isNight, fog = sky.fog;
     if (player.watch.active?.id === "qalxan") for (const a of allies) if (a.alive && Vector3.Distance(a.pos, pp) < 10) a.hp = Math.min(a.type.hp, a.hp + 12 * dt); // qalxan dəstəni sağaldır
     allies.forEach((u, i) => u.update(dt, { foes: enemies, night, fog, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked }));
-    if (player.riding && !dragon.alive) { player.riding = null; dragon.rider = false; player.flyH = 0; say("Əjdaha yaralandı və yerə endi!", 3); }
+    if (player.riding && !dragon.alive) { dismountDragon(); say("Əjdaha yaralandı və yerə endi!", 3); }
     if (dragon.alive && dragon.hp < 500 && dragonWarn) { dragonWarn = false; say("Əjdaha ağır yaralanıb!", 3); }
-    if (!player.riding) {
-      dragon.update(dt, pp, hittable);
-      if (dragon.summon && Vector3.Distance(dragon.pos, dragon.summon) < 7) { // endi — min (düşəndə yalnız yanında enir)
-        const only = dragon.summonOnly; dragon.summon = null; dragon.summonOnly = false;
-        if (!only) { player.riding = dragon; dragon.rider = true; say("Əjdaha: WASD uç · Space/Ctrl qalx/en · Shift sürət · Sol klik alov · G düş", 5); }
-      }
+    if (!player.riding) dragon.update(dt, pp, hittable, undefined, grid);
+    if (!player.moto) moto.update(dt, null, grid); // boş motosiklet sürüşüb dayanır
+    sfx.engine(player.moto ? moto.speed : null);
+    if (dragon.breathing && (flameT -= dt) <= 0) { flameT = 0.4; sfx.flame(Vector3.Distance(dragon.pos, pp)); }
+    Unit.tickFalls(dt);
+    if (!player.moto && !player.riding && msgT <= 0) { // yaxınlaşanda ipucu
+      const h = Vector3.Distance(pp, moto.pos) < 3.2 ? "E — motosiklete min" : dragon.alive && dragon.grounded && Math.hypot(pp.x - dragon.pos.x, pp.z - dragon.pos.z) < 7.5 ? "E — əjdahaya min" : "";
+      if (h && h !== nearHint) say(h, 2.5);
+      nearHint = h;
     }
     const foes: Target[] = [player, ...allies, dragon];
     for (const f of forts) for (const u of f.units) {
@@ -302,7 +334,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     endScreen(won, quit);
   }
   function quit() {
-    removeEventListener("keydown", onKey); Unit.onDeath = null;
+    removeEventListener("keydown", onKey); Unit.onDeath = null; Unit.falling = []; sfx.engine(null); player.interact = null;
     canvas.removeEventListener("pointerdown", unlock); sfx.dispose();
     removeEventListener("keydown", onWheelKey); removeEventListener("keyup", onWheelKey); removeEventListener("mousemove", onWheelMove); wheel.destroy();
     document.removeEventListener("pointerlockchange", lockChange);
@@ -314,6 +346,6 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   }
   if (TEST) setInterval(() => scene.render(), 60); // test: virtual zamanda rAF işləmir — taymerlə, sabit 0.06 s addım
   else engine.runRenderLoop(() => scene.render());
-  if (location.search.includes("test")) (window as unknown as { __game: unknown }).__game = { player, dragon, enemies, allies, grid, forts, state: () => ({ paused, ended, time: gameTime }) };
+  if (location.search.includes("test")) (window as unknown as { __game: unknown }).__game = { player, dragon, moto, enemies, allies, grid, forts, state: () => ({ paused, ended, time: gameTime }) };
   lockSafe();
 }

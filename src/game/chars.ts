@@ -42,6 +42,8 @@ export const LOOKS: Record<string, Look> = {
 
 export class CharLib {
   private templates = new Map<string, Mesh[]>();
+  /** ölüm anı üçün öz skeleti olan şablonlar (hər növə bir neçə): yıxılma əvvəldən oynayır */
+  private dyingPool = new Map<string, { m: Mesh; ag: AnimationGroup; until: number; inst: InstancedMesh | null }[]>();
   private constructor(private scene: Scene, private anims: AssetContainer, private outfits: Record<string, AssetContainer>) {}
 
   static async load(scene: Scene): Promise<CharLib> {
@@ -61,6 +63,29 @@ export class CharLib {
   }
   /** bütün şablonları əvvəlcədən hazırla (oyun zamanı ilişmə olmasın) */
   warm(types: string[]) { for (const t of types) for (const s of Object.keys(CLIP) as AnimState[]) this.instance(t, s).dispose(); }
+
+  /** ölüm hovuzunu əvvəlcədən hazırla (oyun ortasında ilişmə olmasın) */
+  warmDying(types: string[], n = 3) {
+    for (const t of types) {
+      if (!(t in LOOKS)) continue;
+      const pool = [];
+      for (let i = 0; i < n; i++) { const m = this.template(LOOKS[t], "dead", 0); const ag = m.metadata.ag as AnimationGroup; ag.stop(); m.setEnabled(false); pool.push({ m, ag, until: 0, inst: null }); }
+      this.dyingPool.set(t, pool);
+    }
+  }
+  /** yıxılma: boş şablondan instance, Death01 əvvəldən (sürəti azca fərqli); dur — saniyə. Boş yoxdursa null */
+  dying(type: string, now: number): { inst: InstancedMesh; dur: number } | null {
+    const e = this.dyingPool.get(type)?.find((p) => p.until <= now && (!p.inst || p.inst.isDisposed()));
+    if (!e) return null;
+    const speed = 0.9 + Math.random() * 0.3, fps = e.ag.targetedAnimations[0]?.animation.framePerSecond ?? 30;
+    const dur = (e.ag.to - e.ag.from) / fps / speed;
+    e.m.setEnabled(true); e.ag.start(false, speed, e.ag.from, e.ag.to);
+    e.inst = e.m.createInstance(type + "_dying"); e.inst.scaling.set(-1, 1, 1);
+    e.until = now + dur + 0.2;
+    return { inst: e.inst, dur };
+  }
+  /** hovuzda iş qurtardısa şablonu söndür */
+  tickDying(now: number) { for (const [, pool] of this.dyingPool) for (const p of pool) if (p.until <= now && (!p.inst || p.inst.isDisposed()) && p.m.isEnabled()) { p.m.setEnabled(false); p.ag.stop(); } }
 
   /** döyüşçü üçün instance: (növ, hal) şablonundan; 2 faza — addımlar sinxron görünməsin */
   instance(type: string, state: AnimState): InstancedMesh {

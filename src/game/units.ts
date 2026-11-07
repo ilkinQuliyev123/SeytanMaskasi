@@ -9,7 +9,7 @@ import type { AnimState, CharLib } from "./chars";
 let chars: CharLib | null = null;
 export const setChars = (c: CharLib | null) => (chars = c);
 
-export interface Target { pos: Vector3; alive: boolean; hit(dmg: number): void; ally: boolean; stealth?: number } // stealth: görünmə əmsalı (1 — adi)
+export interface Target { pos: Vector3; alive: boolean; hit(dmg: number, from?: Vector3, kind?: string): void; ally: boolean; stealth?: number } // stealth: görünmə əmsalı (1 — adi)
 export type Post = { y: number; face: number };
 export type Ctx = {
   foes: Target[]; night: boolean; fog: number; leader: Vector3; order: "follow" | "attack"; grid: Grid; mates: Unit[];
@@ -29,6 +29,9 @@ function baseMesh(scene: Scene, t: UnitType) {
 export class Unit implements Target {
   /** ölüm xəbəri (oyun: yaxındakı yoldaşlar meyitə baxmağa gəlir) */
   static onDeath: ((u: Unit) => void) | null = null;
+  /** yıxılmaqda olanlar (oyun dövrəsi `Unit.tickFalls` çağırır) */
+  static falling: Unit[] = [];
+  private fallT = 0; private fallDur = 0; private kb: Vector3 | null = null; burned = false;
   mesh: InstancedMesh; hp: number; gun: Gun; facing = 0; target: Target | null = null;
   alert: Vector3 | null = null; fort = ""; route: { x: number; z: number }[] | null = null; private ri = 0; private dir = 1;
   stun = 0; acc = 0; dist = 0; private blk = false; // acc/dist — oyun dövrəsi üçün (uzaqdakılar seyrək yenilənir)
@@ -50,14 +53,46 @@ export class Unit implements Target {
   }
   get ally() { return this.type.ally; }
   get alive() { return this.hp > 0; }
-  hit(dmg: number) {
+  hit(dmg: number, from?: Vector3, kind?: string) {
     if (!this.alive) return;
     this.hp -= dmg;
     if (this.hp <= 0) {
       Unit.onDeath?.(this);
-      if (this.anim) this.setAnim("dead"); else { this.mesh.rotation.x = -Math.PI / 2; this.mesh.position.y += 0.3; }
-      this.mesh.isPickable = false;
-      if (this.far) { this.far.rotation.x = -Math.PI / 2; this.far.position.y += 0.3; this.far.isPickable = false; }
+      this.burned = kind === "fire";
+      this.fall(from);
+    }
+  }
+  /** real yıxılma: zərbə gələn tərəfə dönür, geri itələnir, Death01 əvvəldən oynayır, sonra yerdə uzanır */
+  private fall(from?: Vector3) {
+    this.mesh.isPickable = false;
+    if (this.far) this.far.isPickable = false;
+    if (from) {
+      const dx = this.pos.x - from.x, dz = this.pos.z - from.z, d = Math.hypot(dx, dz) || 1;
+      this.facing = Math.atan2(-dx, -dz); // hücum edənə üz tutub arxası üstə yıxılır
+      this.kb = new Vector3(dx / d, 0, dz / d).scale(this.burned ? 0.6 : 1.1);
+    }
+    const dying = chars && this.anim && this.near ? chars.dying(this.type.id, performance.now() / 1000) : null;
+    if (dying) {
+      const old = this.mesh;
+      this.mesh = dying.inst; this.mesh.metadata = old.metadata; this.mesh.isPickable = false; this.mesh.isVisible = old.isVisible;
+      old.dispose(); this.fallDur = dying.dur; this.anim = "attack"; // müvəqqəti: bitəndə "dead"-ə keçir
+    } else if (this.anim) { this.setAnim("dead"); this.fallDur = 0.35; }
+    else this.fallDur = 0.45;
+    this.fallT = 0; Unit.falling.push(this); this.place();
+  }
+  /** yıxılanları yenilə: itələnmə (ilk 0.35 s), sadə modeldə yavaş aşma, animasiya bitəndə uzanmış şablona keç */
+  static tickFalls(dt: number) {
+    for (let i = Unit.falling.length - 1; i >= 0; i--) {
+      const u = Unit.falling[i]; u.fallT += dt;
+      if (u.kb && u.fallT < 0.35) { const k = (1 - u.fallT / 0.35) * dt * 4; u.pos.x += u.kb.x * k; u.pos.z += u.kb.z * k; }
+      u.place();
+      const p = Math.min(1, u.fallT / 0.45), tilt = -Math.PI / 2 * (p * p * (3 - 2 * p)); // yumşaq aşma (sadə model)
+      if (!u.anim) { u.mesh.rotation.x = tilt; u.mesh.position.y += 0.3 * p; }
+      if (u.far) { u.far.rotation.x = tilt; u.far.position.y += 0.3 * p; }
+      if (u.fallT >= u.fallDur) {
+        if (u.anim === "attack") { u.anim = "walk"; u.setAnim("dead"); u.mesh.isPickable = false; }
+        Unit.falling.splice(i, 1);
+      }
     }
   }
   /** animasiya halı dəyişəndə instance başqa şablona keçir */

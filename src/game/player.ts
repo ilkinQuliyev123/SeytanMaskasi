@@ -10,6 +10,7 @@ import { AnimationGroup, TransformNode } from "@babylonjs/core";
 import { Kit, vcMat } from "./kit";
 import { inTallGrass } from "./world";
 import type { Dragon } from "./dragon";
+import type { Moto } from "./moto";
 
 export class Player implements Target {
   pos = new Vector3(0, 0, 14); yaw = 0; pitch = 0.12; hp = 200; maxHp = 200;
@@ -19,6 +20,10 @@ export class Player implements Target {
   lastNoise = 0; // son atəşin səs radiusu (düşmənlər eşidir)
   private rig: TransformNode | null = null; private clips: Partial<Record<string, AnimationGroup>> = {}; private clip = ""; private shotT = 0;
   jumpV = 0; jumpH = 0; recoil = 0; riding: Dragon | null = null; private hand: TransformNode | null = null; private gunBase: Vector3[] = []; private watchBand: Mesh | null = null;
+  /** motosiklet üstündədirsə */
+  moto: Moto | null = null;
+  /** E: oyun minmə/düşməni yoxlayır; true qaytarsa saat çevrilməsi işləmir */
+  interact: (() => boolean) | null = null;
   wheelOpen = false; flyH = 0; private forms: Record<string, Mesh> = {}; private flash: Mesh; private flashT = 0;
   private dome: Mesh; private dial: Mesh; private wasForm = "";
 
@@ -101,12 +106,13 @@ export class Player implements Target {
     if (k === "KeyC") this.crouch = !this.crouch;
     if (k === "KeyR") this.gun.reload();
     if (k.startsWith("Digit")) { const i = +k.slice(5) - 1; if (i >= 0 && i < this.guns.length) this.cur = i; }
-    if (k === "KeyE") this.watch.active ? this.watch.end() : this.watch.transform(this.formIdx);
+    if (k === "KeyE" && !e.repeat) { if (this.interact?.()) return; if (this.moto || this.riding) return; this.watch.active ? this.watch.end() : this.watch.transform(this.formIdx); }
   }
   pressed(code: string) { return this.keys.has(code); }
 
   update(dt: number, grid: Grid, units: Target[], onShot: (a: Vector3, b: Vector3, hit: boolean) => void) {
-    if (this.riding) return this.ride(dt, units);
+    if (this.riding) return this.ride(dt, units, grid);
+    if (this.moto) return this.drive(dt, grid, units, onShot);
     for (const g of this.guns) g.update(dt);
     this.watch.update(dt);
     const f = this.watch.active;
@@ -148,7 +154,7 @@ export class Player implements Target {
     this.mesh.isVisible = !f && scope !== 2;
     if (this.rig) { // animasiyalı model
       this.rig.setEnabled(!f && scope !== 2);
-      this.rig.position.copyFrom(this.pos); this.rig.rotation.y = this.yaw; this.rig.scaling.setAll(this.crouch ? 1 : 1);
+      this.rig.position.copyFrom(this.pos); this.rig.rotation.set(0, this.yaw, 0);
       const moving = !!(fw || st), g = this.gun;
       this.shotT -= dt;
       this.animate(dt, !this.alive ? "Death01" : this.jumpH > 0 ? "Jump_Loop" : this.crouch ? (moving ? "Crouch_Fwd_Loop" : "Crouch_Idle_Loop")
@@ -195,20 +201,50 @@ export class Player implements Target {
   }
 
   /** əjdaha üstündə: WASD uç, Space/Ctrl qalx/en, Shift sürət, sol klik alov */
-  private ride(dt: number, units: Target[]) {
+  private ride(dt: number, units: Target[], grid: Grid) {
     const d = this.riding!, k = (c: string) => (this.pressed(c) ? 1 : 0);
     d.update(dt, this.pos, units, { fw: k("KeyW") - k("KeyS"), st: k("KeyD") - k("KeyA"), up: k("Space") - k("ControlLeft"), boost: this.pressed("ShiftLeft"),
-      yaw: this.yaw, pitch: this.pitch, fire: this.shooting && document.pointerLockElement === this.canvas });
+      yaw: this.yaw, pitch: this.pitch, fire: this.shooting && document.pointerLockElement === this.canvas }, grid);
     this.pos.copyFrom(d.saddle);
-    this.rig?.setEnabled(true); this.rig?.position.copyFrom(this.pos.add(new Vector3(0, -0.9, 0))); if (this.rig) this.rig.rotation.y = this.yaw;
+    this.rig?.setEnabled(true); this.rig?.position.copyFrom(this.pos.add(new Vector3(0, -0.9, 0))); this.rig?.rotation.set(0, this.yaw, 0);
     this.animate(dt, "Sitting_Idle_Loop");
     for (const g of this.gunMeshes) g.isVisible = false;
     const fwd = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    const cam = this.pos.add(fwd.scale(-16)).add(new Vector3(0, 6 + this.pitch * 8, 0));
+    const cam = this.pos.add(fwd.scale(-19)).add(new Vector3(0, 7 + this.pitch * 9, 0));
     cam.y = Math.max(cam.y, heightAt(cam.x, cam.z) + 1);
     this.camera.position.copyFrom(cam);
     this.camera.setTarget(this.pos.add(new Vector3(Math.sin(this.yaw) * 30, 2 - this.pitch * 20, Math.cos(this.yaw) * 30)));
     this.watch.update(dt); this.lastNoise = 0;
+  }
+
+  /** motosiklet: W/S qaz-əyləc, A/D sükan, Shift nitro; siçan — kamera və nişan, sol klik — atəş */
+  private drive(dt: number, grid: Grid, units: Target[], onShot: (a: Vector3, b: Vector3, hit: boolean) => void) {
+    const m = this.moto!, k = (c: string) => (this.pressed(c) ? 1 : 0);
+    for (const g of this.guns) g.update(dt);
+    this.watch.update(dt);
+    m.update(dt, { fw: k("KeyW") - k("KeyS"), st: k("KeyD") - k("KeyA"), boost: this.pressed("ShiftLeft") }, grid);
+    this.pos.copyFrom(m.seat); this.flyH = 0; this.jumpH = 0; this.jumpV = 0;
+    if (this.rig) {
+      this.rig.setEnabled(this.scope !== 2);
+      this.rig.position.copyFrom(m.seat.add(new Vector3(0, -0.92, 0)));
+      this.rig.rotation.set(m.pitch, m.yaw, m.lean);
+      this.shotT -= dt;
+      this.animate(dt, this.shotT > 0 ? "Pistol_Shoot" : "Driving_Loop");
+    }
+    this.mesh.isVisible = false;
+    this.gunMeshes.forEach((g, i) => { g.isVisible = i === this.cur && this.scope !== 2; if (this.hand) { g.parent = this.hand; g.position.copyFrom(this.gunBase[i]); } });
+    this.recoil = Math.max(0, this.recoil - dt * 4);
+    // kamera: motosikletin arxasında, siçanla ətrafa baxmaq olur; sürətdə bir az geri çəkilir
+    const scope = this.scope, fov = scope === 2 ? 0.22 : scope === 1 ? 0.62 : 1.0 + Math.min(0.15, m.kmh / 600);
+    this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 8);
+    const look = new Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), -Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
+    const back = scope === 1 ? 3 : 5.5 + Math.min(2, m.kmh / 50), shake = m.bump > 0 ? (Math.random() - 0.5) * m.bump * 0.6 : 0;
+    const cam = this.pos.add(new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).scale(-back)).add(new Vector3(shake, 1.8 + this.pitch * 3.5, 0));
+    cam.y = Math.max(cam.y, heightAt(cam.x, cam.z) + 0.6);
+    this.camera.position.copyFrom(cam);
+    this.camera.setTarget(cam.add(look.scale(30)));
+    this.lastNoise = Math.abs(m.speed) > 2 ? 25 : 8; // mühərrik səsi düşmənləri cəlb edir
+    if (this.shooting && document.pointerLockElement === this.canvas) this.fire(units, onShot);
   }
 
   private fire(units: Target[], onShot: (a: Vector3, b: Vector3, hit: boolean) => void) {
@@ -245,7 +281,7 @@ export class Player implements Target {
     let spread = g.w.spread * (this.aiming ? (this.crouch ? 0.15 : 0.4) : g.w.id === "sniper" ? 25 : 1);
     if (g.w.id === "sniper" && !this.aiming) spread = Math.max(spread, 0.03);
     const { point, unit } = this.aim(g.w.range, spread);
-    if (unit && !unit.ally) { unit.hit(g.w.dmg); this.hitFlash = 0.15; }
+    if (unit && !unit.ally) { unit.hit(g.w.dmg, this.pos); this.hitFlash = 0.15; }
     onShot(from, point, !!unit);
     this.lastNoise = g.w.noise;
   }
