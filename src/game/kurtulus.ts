@@ -193,6 +193,10 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   });
   player.bounds = { x0: AREA.x0 + 60, x1: COAST + 12, z0: AREA.z0 + 60, z1: AREA.z1 - 60 }; // 10×5 km meydan; dənizə girmək olmur
   player.pos.set(OUR_BARRACKS.x + 9, 0, OUR_BARRACKS.z); player.yaw = Math.PI / 2; player.pitch = 0.05;
+  { const at = new URLSearchParams(location.search).get("at"); // yoxlama: ?at=coast | hill | trench
+    if (at === "coast") { player.pos.set(COAST - 25, 0, 40); player.yaw = Math.PI / 2 + 0.25; }
+    if (at === "hill") { player.pos.set(HILLS[0].x - 12, 0, HILLS[0].z + 4); player.yaw = Math.PI / 2 - 0.1; player.pitch = 0.12; }
+    if (at === "trench") { player.pos.set(TRENCH_X[2] - 40, 0, 20); player.yaw = Math.PI / 2; } }
   const enemies: Unit[] = [];
   const trenchOf = (bi: number) => TRENCH_X.map((x, i) => ({ x, i })).filter(({ x }) => ENEMY_BARRACKS.reduce((b, q, j) => (Math.abs(q.x - x) < Math.abs(ENEMY_BARRACKS[b].x - x) ? j : b), 0) === bi).map((t) => t.i);
   ENEMY_BARRACKS.forEach((b, bi) => {
