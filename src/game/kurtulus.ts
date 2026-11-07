@@ -169,7 +169,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   player.camera.maxZ = 6000; player.camera.minZ = 0.4;
   const sky = new Sky(scene, player.camera, quality, map.startHour ?? 6.05);
   sky.fixedWeather = true; sky.weather = "aydın"; sky.speed = 1 / 900; // sübh uzun sürür (1 saat = 15 dəq)
-  { const dome = scene.getMeshByName("dome"); if (dome) dome.scaling.setAll(2.8); } // dəniz üfüqü günbəzin içində qalsın
+  { const dome = scene.meshes.find((m) => m.name === "dome" && m.infiniteDistance); if (dome) dome.scaling.setAll(2.8); } // dəniz üfüqü günbəzin içində qalsın
   const { grid, anchors, posts, sea } = buildKurtulus(scene, quality);
 
   // günəş: dənizdən yarımçıq çıxıb (aşağı yarısı dənizin arxasında qalır)
