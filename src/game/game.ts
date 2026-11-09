@@ -80,7 +80,8 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   if (lib) try { lib.warm(["samurai", "ninja", "yeniceri", "ottoman", "okcu", "mulki", "mulki2", "koylu"]); lib.warmDying(["yeniceri", "ottoman", "okcu"], quality === "low" ? 3 : 4); lib.warmDying(["samurai", "ninja"], 2); } catch { setChars(null); }
   Unit.falling = [];
   if (lib) player.useChar(lib);
-  const sky = new Sky(scene, player.camera, quality, map.startHour ?? 9);
+  const hq = new URLSearchParams(location.search).get("h"); // yoxlama: ?h=12 — başlanğıc saatı
+  const sky = new Sky(scene, player.camera, quality, hq ? Number(hq) : map.startHour ?? 9);
   const { grid, anchors } = buildWorld(scene, quality);
 
   // qəsrlər və orduları
@@ -107,7 +108,8 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   const enemies = forts.flatMap((f) => f.units), cannons = forts.flatMap((f) => f.cannons);
   const hittable: Target[] = [...enemies, ...cannons];
   LoadAssetContainerAsync("/assets/models/cannon_01/cannon_01.gltf", scene).then((c) => cannons.forEach((cn) => cn.useModel(c))).catch(() => {}); // real top modeli (yüklənənə qədər sadə model)
-  if (at === "town") { const p = roadPoint(SITES[0], 360); player.pos.set(p.x, 0, p.z); player.yaw = 0; at = "x"; }
+  if (at === "hamlet") { const v = HAMLETS[0]; player.pos.set(v.x - 40, 0, v.z); player.yaw = Math.PI / 2; at = "x"; } // yoxlama: yapon kəndi
+  else if (at === "town") { const p = roadPoint(SITES[0], 360); player.pos.set(p.x, 0, p.z); player.yaw = 0; at = "x"; }
   else if (at) { const f = forts.find((x) => x.fort.id === at) ?? forts[0]; if (f) { const g = f.lay.gate, R = f.lay.site.R + 70; player.pos.set(f.lay.site.x + Math.sin(g) * R, 0, f.lay.site.z + Math.cos(g) * R); player.yaw = g + Math.PI; } }
 
   // görünüş: kino tonu, bloom, FXAA, vinyet

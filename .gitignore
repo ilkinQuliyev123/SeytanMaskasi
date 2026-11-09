@@ -2,3 +2,4 @@ node_modules/
 dist/
 .env
 assets-raw/
+__pycache__/

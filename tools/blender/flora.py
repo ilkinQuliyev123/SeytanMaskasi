@@ -155,7 +155,7 @@ def pine(seed):
         r = 2.9 * (1 - t * 0.72) + rnd.uniform(-0.15, 0.15)
         h = 2.6 - t * 0.6
         bm = cone(z, h, r, 7, rnd, droop=0.55 - t * 0.25)
-        m.add_bm(bm, shade("#1b3f25", "#467a3c", rnd, 1.5, H, (0, 0), 0.25))
+        m.add_bm(bm, shade("#214a2b", "#548a44", rnd, 1.5, H, (0, 0), 0.22))
     return m
 
 
@@ -223,9 +223,9 @@ def rock(seed, name="rock", hex_="#77736b"):
 
 MODELS = [
     pine(3), pine(17),
-    broad(5, "#1d4321", "#3f7432", "broad"),
-    broad(9, "#8c2f12", "#e0892c", "maple", H=7.6, crown=2.7),
-    broad(13, "#2c4519", "#5c7a30", "oak", H=8.2, crown=3.4, clumps=5),
+    broad(5, "#285a2c", "#4f8a3c", "broad"),
+    broad(9, "#9c3a16", "#ec9a38", "maple", H=7.6, crown=2.7),
+    broad(13, "#3a5a22", "#6e8e3a", "oak", H=8.2, crown=3.4, clumps=5),
     cypress(21),
     bush(31), bush(37, "#3a4a1f", "#6f7a34", "bushDry"),
     rock(41), rock(43, "rock2", "#8a7f6c"),

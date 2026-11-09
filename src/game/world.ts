@@ -3,7 +3,7 @@ import { Color3, DynamicTexture, Matrix, Mesh, MeshBuilder, Quaternion, Scene, S
 import { rawHeight, setGroundSampler, Grid, HALF, HAMLETS, heightAt, hillsAt, NORTH, northAt, rng, roadCoords, roadPoint, SITES, townLayout, type Site } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
 import { environment, pbr, terrainMaterial } from "./materials";
-import { floraMesh } from "./flora";
+import { floraMesh, houseMesh, HOUSE_D, HOUSE_W } from "./flora";
 
 export type Quality = "low" | "mid";
 const M = (x: number, y: number, z: number, s = 1, ry = 0, sy = s) =>
@@ -198,14 +198,17 @@ function buildTown(scene: Scene, grid: Grid, anchors: Vector3[]) {
 function buildHamlets(scene: Scene, grid: Grid, anchors: Vector3[]) {
   const k = new Kit(scene), glow = new Kit(scene), field = new Kit(scene), r = rng(5);
   k.texMap = { [WOOD]: ["cedar", "#8a6448"], [PLAST]: ["whitewall", "#f2eadc"], [SLATE]: ["slate", "#7a7060"], [STONE]: ["jstone", "#c8c8c8"] };
+  // evlər: Blender modelləri (tools/blender/houses.py) — kirəmit damlı minka və saman damlı kayabuki
+  const houseMat = vcMat(scene, "vcWorld", 0.05), houseKinds = [houseMesh(scene, "minka", houseMat), houseMesh(scene, "kayabuki", houseMat)];
+  const houseLists: Matrix[][] = [[], []];
   for (const v of HAMLETS) {
     const y0 = hillsAt(v.x, v.z), n = 9;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + r() * 0.3, d = 13 + r() * 12, x = v.x + Math.sin(a) * d, z = v.z + Math.cos(a) * d;
       const w = 6 + r() * 3, dd = 5 + r() * 2, rot: [number, number, number] = [0, a, 0];
-      k.box(w + 0.6, 0.5, dd + 0.6, STONE, [x, y0 + 0.25, z], rot).box(w, 3, dd, WOOD, [x, y0 + 2, z], rot).box(w + 0.02, 1.2, dd + 0.02, PLAST, [x, y0 + 2.6, z], rot)
-        .roof(w + 2.4, dd + 2.4, 2.6, SLATE, [x, y0 + 4.8, z], a, 0.45);
-      glow.box(1.2, 0.8, 0.1, "#ffffff", [x - Math.sin(a) * (dd / 2 + 0.05), y0 + 2.1, z - Math.cos(a) * (dd / 2 + 0.05)], rot);
+      // modelin ön tərəfi (−Z) a bucağı ilə fırlananda (−sin a, −cos a) — kəndin mərkəzinə baxır (işıqlı pəncərə də orada)
+      houseLists[i % 3 === 1 ? 1 : 0].push(Matrix.Compose(new Vector3(w / HOUSE_W, 1, dd / HOUSE_D), Quaternion.RotationAxis(Vector3.Up(), a), new Vector3(x, y0, z)));
+      glow.box(1.2, 0.8, 0.1, "#ffffff", [x - Math.sin(a) * (dd / 2 + 0.12), y0 + 2.1, z - Math.cos(a) * (dd / 2 + 0.12)], rot);
       grid.add({ x, z, r: Math.max(w, dd) / 2 + 0.4 });
     }
     k.cyl(1, 2.2, 2.4, STONE, [v.x, y0 + 0.5, v.z], undefined, 10); grid.add({ x: v.x, z: v.z, r: 1.4 }); // quyu
@@ -217,6 +220,7 @@ function buildHamlets(scene: Scene, grid: Grid, anchors: Vector3[]) {
     }
   }
   for (const m of k.buildAll("hamlet", vcMat(scene, "vcWorld", 0.05))) m.metadata = { solid: true };
+  houseKinds.forEach((m, i) => { scatter(m, houseLists[i], true); m.freezeWorldMatrix(); }); // pickable: kamera toqquşması
   glow.build("hamletGlow", glowMat(scene, "#ffb35a")).isPickable = false;
   const fm = new StandardMaterial("rice", scene);
   fm.diffuseColor = new Color3(0.12, 0.2, 0.15); fm.specularColor = new Color3(0.8, 0.85, 0.9); fm.specularPower = 120;
