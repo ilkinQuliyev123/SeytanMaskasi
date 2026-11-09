@@ -3,6 +3,7 @@ import { Color3, DynamicTexture, Matrix, Mesh, MeshBuilder, Quaternion, Scene, S
 import { rawHeight, setGroundSampler, Grid, HALF, HAMLETS, heightAt, hillsAt, NORTH, northAt, rng, roadCoords, roadPoint, SITES, townLayout, type Site } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
 import { environment, pbr, terrainMaterial } from "./materials";
+import { floraMesh } from "./flora";
 
 export type Quality = "low" | "mid";
 const M = (x: number, y: number, z: number, s = 1, ry = 0, sy = s) =>
@@ -88,14 +89,9 @@ export function buildWorld(scene: Scene, quality: Quality) {
 // --- meşə: şam/sidr, yarpaqlı ağac, payız ağcaqayını ---
 function buildForest(scene: Scene, quality: Quality) {
   const mat = vcMat(scene, "vcTree", 0);
-  const tk = () => Object.assign(new Kit(scene), { texMap: { "#3b2a1c": ["bark", "#9a8a7a"] } as Record<string, [string, string]> });
-  const pine = tk().cyl(3, 0.35, 0.5, "#3b2a1c", [0, 1.5, 0], undefined, 5)
-    .cyl(5, 0, 4, "#16331f", [0, 5, 0], undefined, 6).cyl(4, 0, 2.8, "#1b3d25", [0, 7.6, 0], undefined, 6).buildAll("pine", mat);
-  const broad = tk().cyl(3, 0.35, 0.5, "#3b2a1c", [0, 1.5, 0], undefined, 5)
-    .sph(5, "#24502a", [0, 5, 0], [1, 0.85, 1], 4).sph(3.4, "#2c5e30", [0.9, 6.3, 0.4], undefined, 3).buildAll("broad", mat);
-  const maple = tk().cyl(2.6, 0.3, 0.45, "#3b2a1c", [0, 1.3, 0], undefined, 5)
-    .sph(4.4, "#b8501c", [0, 4.4, 0], [1, 0.8, 1], 4).sph(3, "#d0802a", [-0.8, 5.4, 0.5], undefined, 3).buildAll("maple", mat);
-  const k = quality === "mid" ? 1.6 : 1, r = rng(11), lists: Matrix[][] = [[], [], []];
+  // Blender modelləri (tools/blender/flora.py): şamın 2 variantı, yarpaqlı, payız ağcaqayını
+  const kinds = [floraMesh(scene, "pine", mat), floraMesh(scene, "broad", mat), floraMesh(scene, "maple", mat), floraMesh(scene, "pine_2", mat)];
+  const k = quality === "mid" ? 1.6 : 1, r = rng(11), lists: Matrix[][] = [[], [], [], []];
   const free = (x: number, z: number) => {
     if (Math.abs(x) < 50 && z > -44 && z < 46) return false;
     if (Math.abs(x) < 9 && z > 40 && z < 70) return false;
@@ -125,7 +121,23 @@ function buildForest(scene: Scene, quality: Quality) {
     const sc = 0.9 + r() * 0.8; lists[r() < 0.75 ? 0 : 1].push(M(p.x, heightAt(p.x, p.z) - 0.2, p.z, sc, r() * 6, sc * (1 + r() * 0.5))); n++;
   }
   place(1300 * k, HALF * 2 - 120, 0);
-  [pine, broad, maple].forEach((ms, i) => ms.forEach((m) => scatter(m, lists[i])));
+  lists[0] = lists[0].filter((m, i) => (i % 2 ? (lists[3].push(m), false) : true)); // şamların yarısı 2-ci variant
+  kinds.forEach((m, i) => { scatter(m, lists[i]); m.freezeWorldMatrix(); });
+  buildUnderbrush(scene, free, k);
+}
+
+/** meşə altı: kollar + mamırlı qayalar (Blender modelləri) */
+function buildUnderbrush(scene: Scene, free: (x: number, z: number) => boolean, k: number) {
+  const mat = vcMat(scene, "vcTree", 0), r = rng(23);
+  const kinds = [floraMesh(scene, "bush", mat), floraMesh(scene, "bushDry", mat), floraMesh(scene, "rock", mat), floraMesh(scene, "rock2", mat)];
+  const lists: Matrix[][] = [[], [], [], []];
+  for (let i = 0, n = 0; i < 20000 && n < 1400 * k; i++) {
+    const x = (r() - 0.5) * (HALF * 2 - 120), z = (r() - 0.5) * (HALF * 2 - 120);
+    if (!free(x, z)) continue;
+    const t = r() < 0.62 ? (r() < 0.7 ? 0 : 1) : r() < 0.5 ? 2 : 3, s = t < 2 ? 0.8 + r() * 0.9 : 0.6 + r() * 1.6;
+    lists[t].push(M(x, heightAt(x, z) - (t < 2 ? 0.15 : 0.35 * s), z, s, r() * 6, s * (0.8 + r() * 0.4))); n++;
+  }
+  kinds.forEach((m, i) => { scatter(m, lists[i]); m.freezeWorldMatrix(); });
 }
 
 /** 2 m hündür sıx ot zolağı: çarpaz kartlar + prosedur ot toxuması (alfa), külək ilə yellənir */

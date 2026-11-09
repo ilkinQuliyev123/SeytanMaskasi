@@ -22,7 +22,8 @@ function home() {
 }
 // test rejimi (?auto): menyusuz başla, xəta/FPS-i səhifə başlığına yaz (avtomatik yoxlama üçün)
 const Q = new URLSearchParams(location.search);
-if (Q.get("map") === "kurtulus") { // birbaşa 2-ci xəritə (yoxlama üçün): ?map=kurtulus&n=60&s=20
+if (Q.has("flora")) import("./test/flora_view").then((m) => m.floraView(engine)); // Blender modellərinin yoxlaması
+else if (Q.get("map") === "kurtulus") { // birbaşa 2-ci xəritə (yoxlama üçün): ?map=kurtulus&n=60&s=20
   addEventListener("error", (e) => (document.title = "ERR " + e.message));
   addEventListener("unhandledrejection", (e) => (document.title = "ERR " + String(e.reason)));
   const m = MAPS.find((x) => x.id === "kurtulus")!;

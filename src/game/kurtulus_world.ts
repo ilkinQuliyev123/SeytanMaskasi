@@ -7,6 +7,7 @@ import { Grid, heightAt, rng, setGroundSampler } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
 import { environment, pbr, terrainMaterial } from "./materials";
 import { scatter, segObs, setGrassFn, tm as M, type Quality } from "./world";
+import { floraMesh } from "./flora";
 
 export const TRENCH_X = Array.from({ length: 10 }, (_, i) => -1000 + i * 200); // 200 m-dən bir: −1000…800
 export const TRENCH_Z = 245; // səngərlər vadinin bütün enində
@@ -326,12 +327,9 @@ function grassClump(scene: Scene) {
 }
 function buildVegetation(scene: Scene, quality: Quality) {
   const q = quality === "mid" ? 1.6 : 1, r = rng(17), mat = vcMat(scene, "vcTree", 0);
-  const tk = () => Object.assign(new Kit(scene), { texMap: { "#3b2a1c": ["bark", "#9a8a7a"] } as Record<string, [string, string]> });
-  const oak = tk().cyl(3, 0.4, 0.6, "#3b2a1c", [0, 1.5, 0], undefined, 5).sph(5.5, "#3a5428", [0, 5, 0], [1, 0.8, 1], 4).sph(3.6, "#46602e", [1, 6.2, 0.6], undefined, 3).buildAll("oak", mat);
-  const cypress = tk().cyl(2, 0.3, 0.4, "#3b2a1c", [0, 1, 0], undefined, 5).cyl(10, 0.2, 2.2, "#1f3a22", [0, 6.5, 0], undefined, 7).buildAll("cypress", mat);
-  const pine = tk().cyl(3, 0.35, 0.5, "#3b2a1c", [0, 1.5, 0], undefined, 5).cyl(5, 0, 4, "#1d3a24", [0, 5, 0], undefined, 6).cyl(4, 0, 2.8, "#22432a", [0, 7.6, 0], undefined, 6).buildAll("pineK", mat);
-  const bushK = new Kit(scene); bushK.sph(1.8, "#3a4a22", [0, 0.6, 0], [1.2, 0.75, 1], 4).sph(1.3, "#4a5a2a", [0.6, 0.8, 0.3], undefined, 3).sph(1.2, "#334420", [-0.5, 0.7, -0.4], undefined, 3);
-  const bush = bushK.build("bush", mat); bush.isPickable = false;
+  // Blender modelləri (tools/blender/flora.py)
+  const oak = floraMesh(scene, "oak", mat), cypress = floraMesh(scene, "cypress", mat), pine = floraMesh(scene, "pine_2", mat);
+  const bush = floraMesh(scene, "bushDry", mat);
   const clump = grassClump(scene);
   const trees: Matrix[][] = [[], [], []], bushes: Matrix[] = [], grass: Matrix[] = [];
   const C = COMPOUND;
@@ -367,7 +365,7 @@ function buildVegetation(scene: Scene, quality: Quality) {
     if (blocked(x, z) || r() > 0.12 + hillW(x, z)) continue;
     const s = 0.7 + r() * 0.8; bushes.push(M(x, heightAt(x, z) - 0.2, z, s, r() * 6, s)); n++;
   }
-  [oak, cypress, pine].forEach((ms, i) => ms.forEach((m) => { scatter(m, trees[i]); m.freezeWorldMatrix(); }));
+  [oak, cypress, pine].forEach((m, i) => { scatter(m, trees[i]); m.freezeWorldMatrix(); });
   scatter(bush, bushes); scatter(clump, grass);
 }
 
