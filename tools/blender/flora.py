@@ -159,13 +159,13 @@ def pine(seed):
     return m
 
 
-def broad(seed, base, top, name, H=8.5, crown=3.0, clumps=4, trunk_c=BARK):
+def broad(seed, base, top, name, H=8.5, crown=3.0, clumps=4, trunk_c=BARK, lo=False):
     rnd = random.Random(seed)
     m = Model(name)
     lean = (rnd.uniform(-.3, .3), rnd.uniform(-.3, .3))
     m.add_bm(trunk(H * 0.5, 0.36, 0.2, 5, lean, segs=2), solid(trunk_c, rnd, dark_bottom=0.35, h=3))
     # 2 budaq
-    for k in range(2):
+    for k in range(0 if lo else 2):
         a = rnd.uniform(0, math.tau)
         bm = trunk(crown * 0.9, 0.16, 0.07, 4)
         rot = Matrix.Rotation(math.radians(48), 4, Vector((math.cos(a), math.sin(a), 0)))
@@ -174,12 +174,12 @@ def broad(seed, base, top, name, H=8.5, crown=3.0, clumps=4, trunk_c=BARK):
         m.add_bm(bm, solid(trunk_c, rnd))
     cz = H * 0.62
     sh = shade(base, top, rnd, cz - crown, cz + crown, (lean[0], lean[1]), 0.25)
-    m.add_bm(blob((lean[0], lean[1], cz), crown, (1, 1, 0.82), 2, rnd, 0.22), sh)
+    m.add_bm(blob((lean[0], lean[1], cz), crown, (1, 1, 0.82), 1 if lo else 2, rnd, 0.22), sh)
     for k in range(clumps):
         a = k / clumps * math.tau + rnd.uniform(-.4, .4)
         d = crown * rnd.uniform(0.6, 0.85)
         c = (lean[0] + math.cos(a) * d, lean[1] + math.sin(a) * d, cz + rnd.uniform(-0.9, 1.1))
-        m.add_bm(blob(c, crown * rnd.uniform(0.48, 0.62), (1, 1, 0.85), 2 if k == 0 else 1, rnd, 0.18), sh)
+        m.add_bm(blob(c, crown * rnd.uniform(0.48, 0.62), (1, 1, 0.85), 1 if (lo or k) else 2, rnd, 0.18), sh)
     return m
 
 
@@ -229,6 +229,10 @@ MODELS = [
     cypress(21),
     bush(31), bush(37, "#3a4a1f", "#6f7a34", "bushDry"),
     rock(41), rock(43, "rock2", "#8a7f6c"),
+    # uzaq LOD (eyni toxum → eyni forma, az üçbucaq)
+    broad(5, "#285a2c", "#4f8a3c", "broad_lo", lo=True),
+    broad(9, "#9c3a16", "#ec9a38", "maple_lo", H=7.6, crown=2.7, lo=True),
+    broad(13, "#3a5a22", "#6e8e3a", "oak_lo", H=8.2, crown=3.4, clumps=5, lo=True),
 ]
 # eyni növün variantları: "pine", "pine_2" ...
 seen = {}

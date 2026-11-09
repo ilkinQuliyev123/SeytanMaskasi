@@ -22,6 +22,21 @@ function home() {
 }
 // test rejimi (?auto): menyusuz başla, xəta/FPS-i səhifə başlığına yaz (avtomatik yoxlama üçün)
 const Q = new URLSearchParams(location.search);
+/** yoxlama: rəqəmi ekranın küncündə də göstər (skrinşotda görünsün) */
+const statBox = (t: string) => { const d = document.createElement("div"); d.textContent = "TRIS " + t; d.style.cssText = "position:fixed;left:8px;bottom:110px;z-index:99;background:#000;color:#0f0;font:14px monospace;padding:4px;max-width:1200px"; document.body.append(d); return t; };
+/** yoxlama: səhnədəki üçbucaq sayı (thin instance nüsxələri daxil), min ilə */
+const triCount = (e: Engine) => {
+  const sc = [...e.scenes].sort((x, y) => y.meshes.length - x.meshes.length)[0]; if (!sc) return "?"; // əsas səhnə (ən çox meş)
+  const tri = (m: { getTotalIndices(): number }) => (m.getTotalIndices() / 3) * Math.max(1, (m as unknown as { thinInstanceCount?: number }).thinInstanceCount ?? 1);
+  let all = 0, act = 0; for (const m of sc.meshes) if (m.isEnabled() && m.isVisible) all += tri(m);
+  const a = sc.getActiveMeshes(), by = new Map<string, number>();
+  for (let i = 0; i < a.length; i++) {
+    const m0 = a.data[i] as unknown as { getLOD?(c: unknown): { getTotalIndices(): number; name: string } | null; name: string; getTotalIndices(): number };
+    const m = (m0.getLOD ? m0.getLOD(sc.activeCamera) : m0) ?? null; if (!m) continue; // LOD: həqiqətən çəkilən səviyyə
+    const t = tri(m); act += t; const k = m.name.replace(/_c\d+$/, "").slice(0, 14); by.set(k, (by.get(k) ?? 0) + t); }
+  const top = [...by].sort((x, y) => y[1] - x[1]).slice(0, 8).map(([k, v]) => `${k}:${Math.round(v / 1000)}k`).join(" ");
+  return `${Math.round(all / 1000)}k çəkilən ${Math.round(act / 1000)}k | ${top}`;
+};
 if (Q.has("flora")) import("./test/flora_view").then((m) => m.floraView(engine)); // Blender modellərinin yoxlaması
 else if (Q.get("map") === "kurtulus") { // birbaşa 2-ci xəritə (yoxlama üçün): ?map=kurtulus&n=60&s=20
   addEventListener("error", (e) => (document.title = "ERR " + e.message));
@@ -38,7 +53,7 @@ else if (Q.get("map") === "kurtulus") { // birbaşa 2-ci xəritə (yoxlama üç�
   addEventListener("error", (e) => (document.title = "ERR " + e.message));
   addEventListener("unhandledrejection", (e) => (document.title = "ERR " + String(e.reason)));
   runGame(engine, canvas, MAPS[0], setup, quality, home, new URLSearchParams(location.search).get("at") ?? undefined);
-  setTimeout(() => { if (!document.title.startsWith("ERR")) document.title = `OK fps=${engine.getFps().toFixed(0)} ui=${document.getElementById("ui")!.innerText.slice(0, 120).replace(/\s+/g, " ")}`; }, 8000);
+  setTimeout(() => { if (!document.title.startsWith("ERR")) document.title = `OK fps=${engine.getFps().toFixed(0)} tris=${statBox(triCount(engine))} ui=${document.getElementById("ui")!.innerText.slice(0, 120).replace(/\s+/g, " ")}`; }, 8000);
 } else if (new URLSearchParams(location.search).has("test")) { // real ssenari testləri
   addEventListener("error", (e) => (document.title = "ERR " + e.message));
   await runGame(engine, canvas, MAPS[0], { ...setup, enemies: Number(new URLSearchParams(location.search).get("n") ?? 30) }, quality, home);

@@ -6,7 +6,7 @@ import { Color3, DynamicTexture, Matrix, Mesh, MeshBuilder, Scene, StandardMater
 import { Grid, heightAt, rng, setGroundSampler } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
 import { environment, pbr, terrainMaterial } from "./materials";
-import { scatter, segObs, setGrassFn, tm as M, type Quality } from "./world";
+import { scatter, scatterChunked, segObs, setGrassFn, tm as M, type Quality } from "./world";
 import { floraMesh } from "./flora";
 
 export const TRENCH_X = Array.from({ length: 10 }, (_, i) => -1000 + i * 200); // 200 m-dən bir: −1000…800
@@ -365,8 +365,8 @@ function buildVegetation(scene: Scene, quality: Quality) {
     if (blocked(x, z) || r() > 0.12 + hillW(x, z)) continue;
     const s = 0.7 + r() * 0.8; bushes.push(M(x, heightAt(x, z) - 0.2, z, s, r() * 6, s)); n++;
   }
-  [oak, cypress, pine].forEach((m, i) => { scatter(m, trees[i]); m.freezeWorldMatrix(); });
-  scatter(bush, bushes); scatter(clump, grass);
+  [oak, cypress, pine].forEach((m, i) => scatterChunked(m, trees[i], 160, false, 0, i === 0 ? { mesh: floraMesh(scene, "oak_lo", mat), dist: 140 } : undefined));
+  scatterChunked(bush, bushes, 100, false, 220); scatter(clump, grass);
 }
 
 // --- mərmi çuxurları ---

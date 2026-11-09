@@ -1,9 +1,9 @@
 // Dünya: 2.6 km relyef, 4 dağ, yollar, sıx meşə, mərkəzdə yapon saray kompleksi (dojo zalı, gölməçə, fənərlər).
-import { Color3, DynamicTexture, Matrix, Mesh, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector2, Vector3, VertexBuffer } from "@babylonjs/core";
+import { Color3, DynamicTexture, Matrix, Mesh, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector2, Vector3, VertexBuffer, VertexData } from "@babylonjs/core";
 import { rawHeight, setGroundSampler, Grid, HALF, HAMLETS, heightAt, hillsAt, NORTH, northAt, rng, roadCoords, roadPoint, SITES, townLayout, type Site } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
 import { environment, pbr, terrainMaterial } from "./materials";
-import { floraMesh, houseMesh, HOUSE_D, HOUSE_W, OTTO_L, OTTO_W, ottoMesh } from "./flora";
+import { floraMesh, houseMesh, HOUSE_D, HOUSE_W, OTTO_L, OTTO_W, ottoMesh, type FloraName } from "./flora";
 
 export type Quality = "low" | "mid";
 const M = (x: number, y: number, z: number, s = 1, ry = 0, sy = s) =>
@@ -19,6 +19,44 @@ export function scatter(mesh: Mesh, ms: Matrix[], pickable = false) {
   return mesh;
 }
 export { M as tm };
+
+/** thin instance-ları məkan hüceyrələrinə böl: hər hüceyrə ayrıca meş (ortaq həndəsə, klon) → yalnız kameranın
+ *  gördüyü hüceyrələr çəkilir (bütün meşə hər kadr çəkilmir). far>0: bu məsafədən uzaq hüceyrələr söndürülür (kiçik obyektlər). */
+export function scatterChunked(mesh: Mesh, ms: Matrix[], cell = 150, pickable = false, far = 0, lod?: { mesh: Mesh; dist: number }) {
+  const groups = new Map<string, Matrix[]>();
+  for (const m of ms) { const k = Math.floor(m.m[12] / cell) + "," + Math.floor(m.m[14] / cell); const g = groups.get(k); if (g) g.push(m); else groups.set(k, [m]); }
+  const lists = [...groups.values()];
+  if (!lists.length) { mesh.setEnabled(false); lod?.mesh.setEnabled(false); return [mesh]; }
+  // hər hissəyə ÖZ həndəsəsi: clone() həndəsəni paylaşır, thin instance matrisləri isə həndəsədə saxlanır → bir-birini pozardı
+  const vd = VertexData.ExtractFromMesh(mesh), scene = mesh.getScene();
+  const chunks = lists.map((_, i) => {
+    if (!i) return mesh;
+    const c = new Mesh(mesh.name + "_c" + i, scene); vd.applyToMesh(c); c.material = mesh.material; c.isPickable = mesh.isPickable;
+    return c;
+  });
+  chunks.forEach((c, i) => { scatter(c, lists[i], pickable); c.thinInstanceRefreshBoundingInfo(false); c.freezeWorldMatrix(); });
+  if (lod) { // uzaq hissələr sadə modellə (eyni matrislər, öz həndəsəsi)
+    const lvd = VertexData.ExtractFromMesh(lod.mesh);
+    chunks.forEach((c, i) => {
+      const l = i ? new Mesh(lod.mesh.name + "_c" + i, scene) : lod.mesh;
+      if (i) { lvd.applyToMesh(l); l.material = lod.mesh.material; }
+      scatter(l, lists[i]); l.isPickable = false; l.thinInstanceRefreshBoundingInfo(false); l.freezeWorldMatrix();
+      c.addLODLevel(lod.dist, l);
+    });
+  }
+  if (far > 0) {
+    const centers = chunks.map((c) => c.getBoundingInfo().boundingBox.centerWorld.clone());
+    let t = 0;
+    scene.onBeforeRenderObservable.add(() => {
+      if ((t += scene.getEngine().getDeltaTime()) < 400) return; // 0.4 s-dən bir yoxla
+      t = 0;
+      const cam = scene.activeCamera; if (!cam) return;
+      const p = cam.globalPosition, lim = (far + cell * 0.71) ** 2;
+      chunks.forEach((c, i) => { const v = centers[i], on = (v.x - p.x) ** 2 + (v.z - p.z) ** 2 < lim; if (c.isEnabled() !== on) c.setEnabled(on); });
+    });
+  }
+  return chunks;
+}
 
 /** düz xətt boyunca dairəvi maneələr (divar və s.) */
 export function segObs(g: Grid, x1: number, z1: number, x2: number, z2: number, r = 0.9) {
@@ -91,6 +129,7 @@ function buildForest(scene: Scene, quality: Quality) {
   const mat = vcMat(scene, "vcTree", 0);
   // Blender modelləri (tools/blender/flora.py): şamın 2 variantı, yarpaqlı, payız ağcaqayını
   const kinds = [floraMesh(scene, "pine", mat), floraMesh(scene, "broad", mat), floraMesh(scene, "maple", mat), floraMesh(scene, "pine_2", mat)];
+  const lods: (FloraName | null)[] = [null, "broad_lo", "maple_lo", null];
   const k = quality === "mid" ? 1.6 : 1, r = rng(11), lists: Matrix[][] = [[], [], [], []];
   const free = (x: number, z: number) => {
     if (Math.abs(x) < 50 && z > -44 && z < 46) return false;
@@ -122,7 +161,7 @@ function buildForest(scene: Scene, quality: Quality) {
   }
   place(1300 * k, HALF * 2 - 120, 0);
   lists[0] = lists[0].filter((m, i) => (i % 2 ? (lists[3].push(m), false) : true)); // şamların yarısı 2-ci variant
-  kinds.forEach((m, i) => { scatter(m, lists[i]); m.freezeWorldMatrix(); });
+  kinds.forEach((m, i) => { const l = lods[i]; scatterChunked(m, lists[i], 160, false, 0, l ? { mesh: floraMesh(scene, l, mat), dist: 140 } : undefined); });
   buildUnderbrush(scene, free, k);
 }
 
@@ -137,7 +176,7 @@ function buildUnderbrush(scene: Scene, free: (x: number, z: number) => boolean, 
     const t = r() < 0.62 ? (r() < 0.7 ? 0 : 1) : r() < 0.5 ? 2 : 3, s = t < 2 ? 0.8 + r() * 0.9 : 0.6 + r() * 1.6;
     lists[t].push(M(x, heightAt(x, z) - (t < 2 ? 0.15 : 0.35 * s), z, s, r() * 6, s * (0.8 + r() * 0.4))); n++;
   }
-  kinds.forEach((m, i) => { scatter(m, lists[i]); m.freezeWorldMatrix(); });
+  kinds.forEach((m, i) => scatterChunked(m, lists[i], 100, false, 180)); // kiçik obyektlər: 180 m-dən uzaqda söndür
 }
 
 /** 2 m hündür sıx ot zolağı: çarpaz kartlar + prosedur ot toxuması (alfa), külək ilə yellənir */
@@ -191,7 +230,8 @@ function buildTown(scene: Scene, grid: Grid, anchors: Vector3[]) {
     if (d < 5) grid.add({ x: p.x, z: p.z, r: 2.7 });
   }
   for (let s = NORTH.town[0] + 20; s < NORTH.town[1]; s += 45) { const p = northAt(s, 4); anchors.push(new Vector3(p.x, heightAt(p.x, p.z) + 3, p.z)); glow.sph(0.6, "#ffffff", [p.x, heightAt(p.x, p.z) + 3, p.z], [1, 1.4, 1], 4); }
-  parts.forEach((m, j) => { scatter(m, lists[j], j < 2); m.freezeWorldMatrix(); }); // divar hissələri pickable (kamera/güllə)
+  const partLod = [ottoMesh(scene, "otto1_lo", om), ottoMesh(scene, "otto2_lo", om)];
+  parts.forEach((m, j) => scatterChunked(m, lists[j], 120, j < 2, 0, j < 2 ? { mesh: partLod[j], dist: 150 } : undefined)); // divarlar pickable (kamera/güllə); uzaqda sadə model
   glow.build("townGlow", glowMat(scene, "#ffb35a")).isPickable = false;
 }
 
@@ -221,7 +261,7 @@ function buildHamlets(scene: Scene, grid: Grid, anchors: Vector3[]) {
     }
   }
   for (const m of k.buildAll("hamlet", vcMat(scene, "vcWorld", 0.05))) m.metadata = { solid: true };
-  houseKinds.forEach((m, i) => { scatter(m, houseLists[i], true); m.freezeWorldMatrix(); }); // pickable: kamera toqquşması
+  houseKinds.forEach((m, i) => scatterChunked(m, houseLists[i], 150, true)); // pickable: kamera toqquşması
   glow.build("hamletGlow", glowMat(scene, "#ffb35a")).isPickable = false;
   const fm = new StandardMaterial("rice", scene);
   fm.diffuseColor = new Color3(0.12, 0.2, 0.15); fm.specularColor = new Color3(0.8, 0.85, 0.9); fm.specularPower = 120;

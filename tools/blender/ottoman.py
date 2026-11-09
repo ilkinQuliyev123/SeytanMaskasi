@@ -26,19 +26,16 @@ OVER = 0.45        # üst mərtəbənin çıxıntısı (hər tərəfə)
 
 
 def window(m, x_side, y, z, w=0.9, h=1.1, lattice=True, wall=X):
-    """divarda pəncərə: tünd oyuq + taxta çərçivə + kafəs (x_side = ±1 divar tərəfi, wall — divarın yarı eni)"""
+    """divarda pəncərə: tünd şüşə + üst/alt taxta + kafəs xaçı (x_side = ±1 divar tərəfi, wall — divarın yarı eni).
+    Üçbucaq qənaəti: hər pəncərə 5 qutu (60 üçbucaq)."""
     s = x_side
     xw = s * (wall + 0.02)
     m.box((0.06, w, h), (xw, y, z), GLASS, var=0.02)
-    for dy in (-w / 2, w / 2):
-        m.box((0.12, 0.1, h + 0.1), (xw + s * 0.03, y + dy, z), SHUT)
     for dz in (-h / 2, h / 2):
-        m.box((0.12, w + 0.1, 0.1), (xw + s * 0.03, y, z + dz), SHUT)
+        m.box((0.12, w + 0.16, 0.12), (xw + s * 0.03, y, z + dz), SHUT)
     if lattice:
-        for k in (-1, 0, 1):
-            m.box((0.08, 0.04, h), (xw + s * 0.04, y + k * w / 4, z), SHUT)
-        for k in (-1, 1):
-            m.box((0.08, w, 0.04), (xw + s * 0.04, y, z + k * h / 4), SHUT)
+        m.box((0.08, 0.06, h), (xw + s * 0.04, y, z), SHUT)
+        m.box((0.08, w, 0.06), (xw + s * 0.04, y, z), SHUT)
 
 
 def gable_roof(m, half_w, eave_z, rise, length, color=TILE):
@@ -119,8 +116,39 @@ def end_cap(name, half_w, eave_z, rise, wall_half, wall_top, seed=3):
     return m
 
 
+def seg1_lo(name="otto1_lo", seed=1):
+    """uzaq LOD: gövdə + dam + hər tərəfə 2 tünd pəncərə lövhəsi (~60 üçbucaq)"""
+    m = Model(name, seed)
+    m.box((W, L, LOW + 0.8), (0, 0, (LOW - 0.8) / 2), SAND, var=0.06)
+    for s in (-1, 1):
+        for y in (-1.1, 1.2):
+            m.poly([[(s * (X + 0.03), y - 0.4, 1.5), (s * (X + 0.03), y + 0.4, 1.5), (s * (X + 0.03), y + 0.4, 2.5), (s * (X + 0.03), y - 0.4, 2.5)][:: 1 if s > 0 else -1]], SHUT)
+    lo_roof(m, X + 0.55, LOW, 1.5)
+    return m
+
+
+def seg2_lo(name="otto2_lo", seed=2):
+    m = Model(name, seed)
+    m.box((W, L, LOW + 0.8), (0, 0, (LOW - 0.8) / 2), SAND, var=0.06)
+    UW_ = W + 2 * OVER
+    m.box((UW_, L, UP), (0, 0, LOW + UP / 2), PLASTER, var=0.03)
+    for s in (-1, 1):
+        for y in (-0.9, 0.9):
+            x = s * (UW_ / 2 + 0.03)
+            m.poly([[(x, y - 0.45, LOW + 0.65), (x, y + 0.45, LOW + 0.65), (x, y + 0.45, LOW + 1.9), (x, y - 0.45, LOW + 1.9)][:: 1 if s > 0 else -1]], SHUT)
+    lo_roof(m, UW_ / 2 + 0.5, LOW + UP, 1.7)
+    return m
+
+
+def lo_roof(m, half_w, eave_z, rise):
+    for s in (-1, 1):
+        f = [(s * half_w, -Y, eave_z), (s * half_w, Y, eave_z), (0, Y, eave_z + rise), (0, -Y, eave_z + rise)]
+        m.poly([f if s > 0 else list(reversed(f))], TILE)
+        m.poly([list(reversed(f)) if s > 0 else f], TIMBER)  # alt üz
+
+
 UW = W + 2 * OVER
-MODELS = [
+MODELS = [seg1_lo(), seg2_lo(),
     seg1(), seg2(),
     end_cap("otto1_end", X + 0.55, LOW, 1.5, X, LOW),
     end_cap("otto2_end", UW / 2 + 0.5, LOW + UP, 1.7, UW / 2, LOW + UP),
