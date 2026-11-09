@@ -142,3 +142,30 @@ Son run 600 s-də bitmədi (çox yavaş) — sabah: test zamanı kölgə/hissəc
 5. UAL2 animasiyaları, süvari və bədheybət modellərini təkmilləşdir; əjdahanı real ssenari ilə test et.
 6. Deploy (Cloudflare Pages + Access) — istifadəçi hesab açanda.
 7. Sonra Mərhələ B (Monqol, Çin, Viking qəsrləri) və digər xəritələr.
+
+
+## Vəziyyət (09.11.2026 axşam — istifadəçi 2 saatlığa getdi)
+Son commit-lər GitHub-dadır (`3dee403` və əvvəlki). **Xəritə 2 — Qurtuluş Savaşı** yazılıb və brauzerdə açılır (skrinşotlarla yoxlanıb: kənd, əsgərlər, səngər, sahil, günəş, gəmilər).
+- Fayllar: `src/game/kurtulus.ts` (oyun dövrəsi: ordular, 9 gəmi + desant qayıqları, 6 təpə topu, mərmi/effektlər, sübh səması/işıq, FPS-ə görə ekran ölçüsü), `src/game/kurtulus_world.ts` (dünya: dar vadi, kənd + divarlı kazarma, otlaq/samanlıq, 10 səngər x = −1000…800, sahil x≈960, təpələr, bitki).
+- Yoxlama: `?map=kurtulus&n=60&s=20&at=coast|hill|trench` (birbaşa xəritə 2, az əsgər, kamera mövqeyi).
+- Dar vadi; kazarma divarları → 200 m otlaq və samanlıq → 200 m-dən bir 10 səngər sahilə qədər; en — iki yandakı dağlarda bitir.
+- 100 türk əsgəri (kabalak, xaki), hamıda süngülü tüfəng (yaxında süngü; F hücum əmrində 40 m-dən süngü həmləsi); oyunçuda snayper + M16.
+- Quruda 3 kazarma (səngər müdafiəçiləri + kazarmadakılar). Donanma (9 gəmi × 50) **atəş açmır**; oyunçu son səngərə yaxınlaşanda (x > TRENCH_X[8] − 60) qayıqlarla 10-luq desant çıxarır.
+- 6 təpə topu (ən hündürdə böyük top, ora ziqzaq yol). G — 3 əsgəri topa göndər (özləri gəmi/qayığı vurur), H — geri çağır, E — topa keç (sarı halqa — düşmə yeri; mərmi dəqiq ora düşür).
+- **Mühüm düzəliş:** skeletli instance-larda glTF kökünün güzgüsü dünya fəzasında tətbiq olunurdu — animasiyalı əsgər x-də əks yerdə çəkilirdi (xəritə 1-də mərkəzə yaxın olduğu üçün az bilinirdi). `Unit.place`-də kompensasiya (position.x = −x, rotation.y = −facing), animasiyalı instance-lar `alwaysSelectAsActiveMesh`, vurma yoxlaması sadə (far) model üzrə.
+- Görüntü: vertex rəngli sübh səması, isti günəş / soyuq ətraf işıq, ColorCurves, toz və ağız alovu. «Orta»da əlavə: kölgə (oyunçu ətrafı 80 m), duman, bloom, FXAA.
+- FPS (istifadəçidə ~11 idi): animasiyalı model (≈25k təpə!) yalnız ən yaxın 10 əsgərdə ≤ 40 m; zəif rejimdə post-proses keçidi yox (tonlama scene.imageProcessingConfiguration-da), kölgə/duman yox, az ot/ağac; 60 FPS hədəfli avtomatik ekran ölçüsü. **Yeni FPS hələ ölçülməyib** — istifadəçidən soruş.
+- Noutbukda **NVIDIA GeForce 840M** də var: Edge və Chrome registrdə (HKCU\Software\Microsoft\DirectX\UserGpuPreferences, GpuPreference=2) NVIDIA-ya keçirildi — brauzer yenidən açılmalıdır; edge://gpu ilə yoxla.
+
+### Blender (istifadəçi: «Blender ilə yaz, oyun bitəndə Blender-i bağlayarıq»)
+- Blender 4.5.15 LTS portativ: `E:\Blender\blender-4.5.15-windows-x64` (SHA256 rəsmi ilə yoxlanıb). MCP serveri: `E:\Blender\mcp-venv\Scripts\mcp-for-blender.exe` (paket blender-mcp → mcp-for-blender). Əlavə: `E:\Blender\addon\addon.py` (yalnız localhost:9876).
+- Avto rejim əlavəni Blender-ə qoşmağı və `claude mcp add`-i blokladı → **istifadəçi özü edəcək**: Blender → Edit → Preferences → Add-ons → Install from Disk → addon.py → «MCP for Blender» işarələ; N → BlenderMCP → Connect; terminalda `claude mcp add blender -s user -- E:\Blender\mcp-venv\Scripts\mcp-for-blender.exe`; Claude Code-u yenidən aç.
+- Blender skills paketi (96 bacarıq) `C:\Users\ILKIN\.claude\skills`-də quruludur.
+- İş qaydası: Blender-də model → GLB ixrac (`public/assets/...`) → Blender-i bağla → oyunu yoxla (3.9 GB RAM ikisinə çatmır). Hər modelin təpə sayına limit (FPS).
+
+## Növbəti (istifadəçi qayıdanda)
+1. Soruş: Blender addımları edildimi? FPS neçədir (NVIDIA ilə)?
+2. Blender qoşulubsa: əvvəl türk əsgəri + süngülü tüfəng (aşağı-poli; mövcud UAL skeletinə uyğun), sonra gəmi, top, binalar → GLB.
+3. FPS 60 deyilsə: əsgər sayı / ot məsafəsi, uzaq ağacları gizlət, relyef materialını ucuzlaşdır.
+4. Xəritə 2-də yoxlanmayanlar: G ilə topa heyət, gəmi/qayıq batırma, desant, süngü; kənd və böyük təpə görüntüsü; dağların rəngi (dumanda çox açıq).
+5. Köhnə siyahı: xəritə 1 (NavMesh, ayarlar, mini-xəritə), xəritə 3–4, deploy, səs.
