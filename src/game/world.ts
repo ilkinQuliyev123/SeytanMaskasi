@@ -3,7 +3,7 @@ import { Color3, DynamicTexture, Matrix, Mesh, MeshBuilder, Quaternion, Scene, S
 import { rawHeight, setGroundSampler, Grid, HALF, HAMLETS, heightAt, hillsAt, NORTH, northAt, rng, roadCoords, roadPoint, SITES, townLayout, type Site } from "./logic";
 import { glowMat, Kit, vcMat } from "./kit";
 import { environment, pbr, terrainMaterial } from "./materials";
-import { floraMesh, houseMesh, HOUSE_D, HOUSE_W } from "./flora";
+import { floraMesh, houseMesh, HOUSE_D, HOUSE_W, OTTO_L, OTTO_W, ottoMesh } from "./flora";
 
 export type Quality = "low" | "mid";
 const M = (x: number, y: number, z: number, s = 1, ry = 0, sy = s) =>
@@ -175,22 +175,23 @@ function tallGrass(scene: Scene) {
 function buildTown(scene: Scene, grid: Grid, anchors: Vector3[]) {
   tallGrass(scene);
 
-  const T = townLayout(), k = new Kit(scene), roofs = new Kit(scene), glow = new Kit(scene);
-  const tm: Record<string, [string, string]> = { "#a8977c": ["sandstone", "#d8ccb4"], "#e2d6bf": ["plaster", "#ffffff"], "#4a3020": ["cedar", "#6a4a34"], "#8e4a2e": ["roof", "#ffffff"] };
-  k.texMap = tm; roofs.texMap = tm;
+  const T = townLayout(), glow = new Kit(scene);
+  // evlər: Blender modul hissələri (tools/blender/ottoman.py) — 5 m-lik hissələr ardıcıl + iki ucda alınlıq
+  const om = vcMat(scene, "vcWorld", 0.05), parts = [ottoMesh(scene, "otto1", om), ottoMesh(scene, "otto2", om), ottoMesh(scene, "otto1_end", om), ottoMesh(scene, "otto2_end", om)];
+  const lists: Matrix[][] = [[], [], [], []], flip = Quaternion.RotationAxis(Vector3.Up(), Math.PI);
   let i = 0;
   for (const h of T.houses) {
     const p = northAt(h.s, h.lat), y = heightAt(p.x, p.z) - 0.4, tall = (i++ * 7) % 3 !== 0, w = T.u - 0.4, d = h.len - 0.6;
-    k.box(w, 3.4, d, "#a8977c", [p.x, y + 1.7, p.z]);
-    if (tall) k.box(w + 0.7, 2.6, d + 0.5, "#e2d6bf", [p.x, y + 4.7, p.z]).box(w + 0.75, 0.15, d + 0.55, "#4a3020", [p.x, y + 3.45, p.z]);
-    roofs.roof(w + 1.3, d + 1.1, 1.6, "#8e4a2e", [p.x, y + (tall ? 6 : 3.4) + 0.8, p.z], 0, 0.3);
-    if (i % 4 === 0) glow.box(0.1, 0.8, 1, "#ffffff", [p.x + (h.lat < 0 ? 1 : -1) * (w / 2 + (tall ? 0.4 : 0.05)), y + (tall ? 4.6 : 1.8), p.z]);
+    const n = Math.max(1, Math.round(h.len / OTTO_L)), f = d / (n * OTTO_L), sc = new Vector3(w / OTTO_W, 1, f), t = tall ? 1 : 0;
+    for (let j = 0; j < n; j++) lists[t].push(Matrix.Compose(sc, Quaternion.Identity(), new Vector3(p.x, y, p.z + (j - (n - 1) / 2) * OTTO_L * f)));
+    const e = ((n - 1) / 2) * OTTO_L * f; // uc hissələrin mərkəzi
+    lists[2 + t].push(Matrix.Compose(sc, Quaternion.Identity(), new Vector3(p.x, y, p.z + e)), Matrix.Compose(sc, flip, new Vector3(p.x, y, p.z - e)));
+    if (i % 4 === 0) glow.box(0.1, 0.8, 1, "#ffffff", [p.x + (h.lat < 0 ? 1 : -1) * (w / 2 + (tall ? 0.52 : 0.08)), y + (tall ? 4.6 : 1.8), p.z]);
     for (let t = -d / 2 + 2.5; t <= d / 2 - 2.4; t += 4.6) grid.add({ x: p.x, z: p.z + t, r: 2.7 });
     if (d < 5) grid.add({ x: p.x, z: p.z, r: 2.7 });
   }
   for (let s = NORTH.town[0] + 20; s < NORTH.town[1]; s += 45) { const p = northAt(s, 4); anchors.push(new Vector3(p.x, heightAt(p.x, p.z) + 3, p.z)); glow.sph(0.6, "#ffffff", [p.x, heightAt(p.x, p.z) + 3, p.z], [1, 1.4, 1], 4); }
-  for (const m of k.buildAll("town", vcMat(scene, "vcWorld", 0.05))) m.metadata = { solid: true };
-  for (const m of roofs.buildAll("townRoof", vcMat(scene, "vcWorld", 0.05))) m.isPickable = false;
+  parts.forEach((m, j) => { scatter(m, lists[j], j < 2); m.freezeWorldMatrix(); }); // divar hissələri pickable (kamera/güllə)
   glow.build("townGlow", glowMat(scene, "#ffb35a")).isPickable = false;
 }
 

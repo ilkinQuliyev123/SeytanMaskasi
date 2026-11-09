@@ -2,7 +2,7 @@
 import { Color3, DefaultRenderingPipeline, Engine, GlowLayer, ImageProcessingConfiguration, LoadAssetContainerAsync, MeshBuilder, PointLight, Ray, Scene, SSAO2RenderingPipeline, StandardMaterial, Vector3, type LinesMesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { FORTS, UNITS, type ArmySetup, type Fort, type GameMap } from "./data";
-import { fortLayout, HAMLETS, heightAt, roadPoint, SITES, townLayout, type FortLayout } from "./logic";
+import { fortLayout, HAMLETS, heightAt, NORTH, northAt, roadPoint, SITES, townLayout, type FortLayout } from "./logic";
 import { Player } from "./player";
 import { Sky } from "./sky";
 import { spawn, Unit, type Post, type Target } from "./units";
@@ -109,6 +109,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   const hittable: Target[] = [...enemies, ...cannons];
   LoadAssetContainerAsync("/assets/models/cannon_01/cannon_01.gltf", scene).then((c) => cannons.forEach((cn) => cn.useModel(c))).catch(() => {}); // real top modeli (yüklənənə qədər sadə model)
   if (at === "hamlet") { const v = HAMLETS[0]; player.pos.set(v.x - 40, 0, v.z); player.yaw = Math.PI / 2; at = "x"; } // yoxlama: yapon kəndi
+  else if (at === "street") { const p = northAt(NORTH.town[0] + 60, 0), q = northAt(NORTH.town[0] + 70, 0); player.pos.set(p.x, 0, p.z); player.yaw = Math.atan2(q.x - p.x, q.z - p.z); at = "x"; } // yoxlama: məhəllənin içi
   else if (at === "town") { const p = roadPoint(SITES[0], 360); player.pos.set(p.x, 0, p.z); player.yaw = 0; at = "x"; }
   else if (at) { const f = forts.find((x) => x.fort.id === at) ?? forts[0]; if (f) { const g = f.lay.gate, R = f.lay.site.R + 70; player.pos.set(f.lay.site.x + Math.sin(g) * R, 0, f.lay.site.z + Math.cos(g) * R); player.yaw = g + Math.PI; } }
 

@@ -4,9 +4,11 @@
 import { Mesh, Scene, VertexData, type Material } from "@babylonjs/core";
 import flora from "./models/flora.json";
 import houses from "./models/houses.json";
+import ottoman from "./models/ottoman.json";
 
 export type FloraName = keyof typeof flora;
 export type HouseName = keyof typeof houses;
+export type OttoName = keyof typeof ottoman;
 type Raw = { p: number[]; n: number[]; c: number[] };
 
 /** JSON modelindən meş */
@@ -32,3 +34,6 @@ export const floraMesh = (scene: Scene, name: FloraName, mat: Material) => lowpo
 /** yapon evi: bünövrə 7.5×6 m, ön tərəf −Z; miqyas w/7.5 × dd/6 */
 export const houseMesh = (scene: Scene, name: HouseName, mat: Material) => lowpolyMesh(scene, name, houses[name] as Raw, mat);
 export const HOUSE_W = 7.5, HOUSE_D = 6;
+/** Osmanlı sıra evi hissəsi: eni 4.6 m (X), uzunluğu 5 m (Z); «_end» — +Z ucuna alınlıq */
+export const ottoMesh = (scene: Scene, name: OttoName, mat: Material) => lowpolyMesh(scene, name, ottoman[name] as Raw, mat);
+export const OTTO_W = 4.6, OTTO_L = 5;
