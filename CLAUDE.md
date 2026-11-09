@@ -33,10 +33,25 @@ Sessiyanın əvvəlində bu faylı oxu. Hər addımdan sonra «Vəziyyət» və 
 - `src/ui/ui.ts`, `src/ui/wheel.ts`, `src/style.css`, `src/i18n/az.ts` — kinematik UI (sonnet).
 - `tools/fetch_assets.py` (Poly Haven), `tools/fetch_itch.py` (Quaternius itch.io), `tools/extract_chars.py`. Xam zip-lər `assets-raw/` (gitignore).
 
+## Blender modelləri (09.11.2026)
+- Blender 5.2 quraşdırılıb: `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`. Modellər prosedur Python skriptləridir (əl ilə modelləmə yox), vertex rəngi + düz üçbucaq → JSON (sinxron yüklənir):
+  `"<blender.exe>" --background --factory-startup --python tools/blender/<skript>.py -- src/game/models/<ad>.json [önizləmə.png]`
+- `tools/blender/lowpoly.py` — ümumi (Model, box, poly, ixrac, Workbench önizləmə). `flora.py` — ağaclar/kollar/qayalar (+ `_lo` LOD). `houses.py` — yapon minka/kayabuki. `ottoman.py` — Osmanlı sıra evinin 5 m-lik hissələri (+ `_lo`, `_end` alınlıq).
+- Oyunda: `src/game/flora.ts` (`lowpolyMesh`, `floraMesh`, `houseMesh`, `ottoMesh`). Ox çevrilməsi: Blender (x,y,z) → oyun (x,z,y) + üçbucaq sırası çevrilir (yoxlanıb). Rənglər hər üçbucağa bir dəfə (indeks `floor(i/3)`).
+- `world.ts → scatterChunked(mesh, ms, cell, pickable, far, lod)`: thin instance-ları hüceyrələrə bölür. **Diqqət:** `mesh.clone()` həndəsəni paylaşır, thin instance matrisləri həndəsədə saxlanır → hər hissəyə `VertexData.ExtractFromMesh` ilə öz həndəsəsi verilməlidir (yoxsa nəhəng üçbucaqlar).
+- Yoxlama: `?flora` (modellər gündüz), `?auto&at=hamlet|street|town`, `?h=11` (başlanğıc saatı). `?auto`-da ekranda üçbucaq sayı + ən ağır meşlər.
+- BlenderMCP (canlı Blender idarəsi) hələ qoşulmayıb — istifadəçi addonu özü quraşdırmalı və `claude mcp add blender ...` işlətməlidir (avtomatik etmək bloklandı).
+
 ## Əmrlər
 - Build + yerli server: `npx vite build` → `npx vite preview --host 127.0.0.1 --port 4173` → http://127.0.0.1:4173 (istifadəçi Ctrl+F5 etməlidir).
 - Yoxlama: Edge headless `--screenshot` / `--dump-dom` + `--enable-logging=stderr --v=0` (konsol xətaları üçün `grep CONSOLE`). Test parametrləri: `?auto`, `?auto&at=town`, `?auto&at=ottoman`, `?setup`.
 - **Diqqət:** headless proqram renderidir (FPS göstərmir). İstifadəçinin FPS-i (HD 4400) ilk versiyada ~52 idi; ağır dəyişikliklərdən sonra «donur» dedi — real FPS ölçülməyib.
+
+## Vəziyyət (09.11.2026 — istifadəçi 2–4 saat yox idi, «Blender ilə yenilə» dedi)
+Edildi (hamısı push, son `2c20ec4`+): Blender ağacları/kollar/qayalar (hər iki xəritə), yapon kənd evləri, Osmanlı məhəlləsi modul evləri, hissələrə bölmə + LOD.
+Ölçülən (headless, `?auto` başlanğıc): çəkilən ~0.9 M üçbucaq. Məhəllənin içində ~2.2 M, onun **1.4 M-i personajlar** (`Male_Ranger…` — yeniçərilər) → növbəti performans hədəfi: personaj LOD-u/sayı.
+Həll olunmamış: səmada qara uzunsov «zolaqlar» (köhnə versiyada da var — mənbəyi tapılmayıb); Xəritə 2-də gəmi qara görünür (köhnə).
+İstifadəçi hələ real FPS deməyib — soruş.
 
 ## Vəziyyət (06.11.2026 gecə — istifadəçi layihəni DAYANDIRDI)
 Son commit `57a23fd` (GitHub private: ilkinQuliyev123/SeytanMaskasi). Xəritə 1 oynanır, amma istifadəçi narazıdır:
