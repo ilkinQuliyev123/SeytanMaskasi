@@ -5,7 +5,7 @@ import { Gun, HALF, heightAt, Watch, type Grid } from "./logic";
 import { unitModel, weaponModel } from "./kit";
 import type { Target, Unit } from "./units";
 import { formModel, watchModel } from "./forms";
-import { hat, type CharLib } from "./chars";
+import { hat, type CharLib, HEAD_UP } from "./chars";
 import { AnimationGroup, TransformNode } from "@babylonjs/core";
 import { Kit, vcMat } from "./kit";
 import { inTallGrass } from "./world";
@@ -64,13 +64,14 @@ export class Player implements Target {
   }
 
   /** animasiyalı samuray modelinə keç: oni maskalı kabuto başa, silahlar sağ ələ, saat sol qola bağlanır */
-  useChar(lib: CharLib, look: { tint: string; head: (k: Kit) => unknown } = { tint: "#2a1416", head: hat.kabuto }) {
-    const c = lib.player({ outfit: "Male_Ranger", tint: look.tint });
+  useChar(lib: CharLib, look: { tint: string; head: (k: Kit) => unknown; outfit?: string; glbHead?: string } = { tint: "#2a1416", head: hat.kabuto }) {
+    const c = lib.player({ outfit: look.outfit ?? "Male_Ranger", tint: look.tint });
     this.rig = new TransformNode("rig", this.scene);
     c.root.parent = this.rig;
     const attach = (m: Mesh, node: TransformNode, off: Vector3) => { m.parent = null; m.position.copyFrom(node.getAbsolutePosition().add(off)); m.rotation.setAll(0); m.setParent(node); };
-    const k = new Kit(this.scene); look.head(k);
-    attach(k.build("pHelmet", vcMat(this.scene, "vcArmor", 0.25)), c.head, new Vector3(0, 0.1, 0));
+    const hm = vcMat(this.scene, "vcArmor", 0.25);
+    const helm = lib.glbProp(look.glbHead, hm) ?? (() => { const k = new Kit(this.scene); look.head(k); return k.build("pHelmet", hm); })();
+    attach(helm, c.head, new Vector3(0, look.outfit ? HEAD_UP : 0.1, 0));
     for (const g of this.gunMeshes) { g.rotation.setAll(0); attach(g, c.hand, new Vector3(0, 0, 0.05)); this.gunBase.push(g.position.clone()); }
     this.hand = c.hand;
     if (this.watchBand) attach(this.watchBand, this.scene.getTransformNodeByName("P_hand_l") ?? c.hand, new Vector3(0, 0, 0));

@@ -177,7 +177,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   setChars(lib);
   if (lib) try { lib.warm(["turk", "isgalci"]); lib.warmDying(["isgalci"], low ? 4 : 6); lib.warmDying(["turk"], 3); } catch { setChars(null); }
   Unit.falling = []; Unit.onDeath = null;
-  if (lib) player.useChar(lib, { tint: "#6e6646", head: hat.kabalak });
+  if (lib) player.useChar(lib, { tint: "#6e6646", head: hat.kabalak, outfit: "Turk_Soldier", glbHead: "kabalak" });
   player.camera.maxZ = 6000; player.camera.minZ = 0.4;
   const sky = new Sky(scene, player.camera, quality, map.startHour ?? 6.05);
   sky.fixedWeather = true; sky.weather = "aydın"; sky.speed = 1 / 900; // sübh uzun sürür (1 saat = 15 dəq)

@@ -45,12 +45,18 @@ export const LOOKS: Record<string, Look> = {
   yeniceri: { outfit: "Male_Ranger", tint: "#9a2a24", head: hat.bork, hand: arm.musket },
   ottoman: { outfit: "Male_Ranger", tint: "#3d6a40", head: hat.turban, hand: arm.sword },
   okcu: { outfit: "Male_Ranger", tint: "#5a6a34", head: hat.bork, hand: arm.bow },
-  turk: { outfit: "Male_Ranger", tint: "#7a7250", head: hat.kabalak, hand: arm.mauser, glbHead: "kabalak", glbHand: "mauser" },
-  isgalci: { outfit: "Male_Ranger", tint: "#4a5868", head: hat.helmet, hand: arm.mauser, glbHead: "helmet", glbHand: "mauser" },
+  turk: { outfit: "Turk_Soldier", tint: "#7a7250", head: hat.kabalak, hand: arm.mauser, glbHead: "kabalak", glbHand: "mauser" },
+  isgalci: { outfit: "Enemy_Soldier", tint: "#4a5868", head: hat.helmet, hand: arm.mauser, glbHead: "helmet", glbHand: "mauser" },
   mulki: { outfit: "Male_Peasant", tint: "#ffffff" },
   mulki2: { outfit: "Female_Peasant", tint: "#ffffff" },
   koylu: { outfit: "Male_Peasant", tint: "#c8d0e0", head: hat.kasa },
 };
+
+/** Blender-də yığılmış əsgərlər (blender/soldiers.blend): eyni UAL skeleti, forma + təchizat; yüklənməsə Male_Ranger işləyir */
+const SOLDIER = { Turk_Soldier: 1, Enemy_Soldier: 1 };
+/** Blender əsgərinin başı Ranger-dən hündürdür — papaq bu qədər yuxarı */
+export const HEAD_UP = 0.155;
+const OUTFITS = ["Male_Ranger", "Male_Peasant", "Female_Peasant", ...Object.keys(SOLDIER)];
 
 export class CharLib {
   private templates = new Map<string, Mesh[]>();
@@ -60,8 +66,10 @@ export class CharLib {
 
   static async load(scene: Scene): Promise<CharLib> {
     const [props, anims, ...outs] = await Promise.all([LoadAssetContainerAsync("/assets/models/props.glb", scene).catch(() => null), LoadAssetContainerAsync(DIR + "UAL1.glb", scene),
-      ...["Male_Ranger", "Male_Peasant", "Female_Peasant"].map((o) => LoadAssetContainerAsync(DIR + o + ".gltf", scene))]);
-    return new CharLib(scene, anims, { Male_Ranger: outs[0], Male_Peasant: outs[1], Female_Peasant: outs[2] }, props);
+      ...OUTFITS.map((o) => LoadAssetContainerAsync(DIR + o + ".gltf", scene).catch((e) => { if (o in SOLDIER) return null; throw e; }))]);
+    const map: Record<string, AssetContainer> = {};
+    OUTFITS.forEach((o, i) => { const c = outs[i] ?? outs[0]; if (c) map[o] = c; }); // Blender əsgəri yüklənməsə — köhnə Ranger
+    return new CharLib(scene, anims, map, props);
   }
   private broken = false;
   has(type: string) { return !this.broken && type in LOOKS; }
@@ -136,14 +144,14 @@ export class CharLib {
     const fix = (m: Material | null): Material | null => {
       if (!m) return m;
       if (m instanceof MultiMaterial) { m.subMaterials = m.subMaterials.map((s) => fix(s)); return m; }
-      if (!done.has(m)) { const n = m.clone(m.name + tag + hex)!; if (n instanceof PBRMaterial && !/skin|male|female|eye|hair/i.test(m.name)) n.albedoColor = c; n.backFaceCulling = false; done.set(m, n); }
+      if (!done.has(m)) { const n = m.clone(m.name + tag + hex)!; if (n instanceof PBRMaterial && !/skin|male|female|eye|hair|keep/i.test(m.name)) n.albedoColor = c; n.backFaceCulling = false; done.set(m, n); }
       return done.get(m)!;
     };
     for (const m of meshes) m.material = fix(m.material);
   }
 
   /** Blender modeli: props.glb-dən meşin surəti (glTF kök güzgüsü geri alınır — +x sağ, +y yuxarı, +z irəli) */
-  private glbProp(name: string | undefined, mat: Material): Mesh | null {
+  glbProp(name: string | undefined, mat: Material): Mesh | null {
     const src = name ? (this.props?.meshes.find((m) => m.name === name) as Mesh | undefined) : undefined;
     if (!src || !src.getTotalVertices()) return null;
     const vd = VertexData.ExtractFromMesh(src, true, true);
@@ -174,7 +182,7 @@ export class CharLib {
       m.setVerticesData(VertexBuffer.MatricesWeightsKind, new Float32Array(n * 4).map((_, i) => (i % 4 ? 0 : 1)));
       m.skeleton = skel; props.push(m);
     };
-    add(look.head, "Head", new Vector3(0, 0.1, 0), look.glbHead);
+    add(look.head, "Head", new Vector3(0, look.outfit in SOLDIER ? HEAD_UP : 0.1, 0), look.glbHead);
     add(look.hand, "hand_r", new Vector3(0, 0, 0.05), look.glbHand);
     // birləşdirmə üçün eyni atribut dəsti: glTF hissələrinə ağ vertex rəngi, artıq atributlar silinir
     for (const m of parts) if (!m.isVerticesDataPresent(VertexBuffer.ColorKind)) m.setVerticesData(VertexBuffer.ColorKind, new Float32Array(m.getTotalVertices() * 4).fill(1));
