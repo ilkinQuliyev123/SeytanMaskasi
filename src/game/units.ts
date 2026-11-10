@@ -146,7 +146,7 @@ export class Unit implements Target {
         if (!f.alive) continue;
         const dx = f.pos.x - this.pos.x, dz = f.pos.z - this.pos.z, d = dx * dx + dz * dz;
         const sv = k * (f.stealth ?? 1); // görünməz/balaca hədəfi görmək çətindir
-        if (d < bd && ((this.target === f && sv > 0.3 * k) || canSee(dx / sv, dz / sv, this.facing, ctx.night, false, ctx.fog) || (this.ally && d < 900))) { bd = d; best = f; }
+        if (d < bd && ((this.target === f && sv > 0.3 * k) || canSee(dx / sv, dz / sv, this.facing, ctx.night, false, ctx.fog) || (this.ally && d < (this.ally && !f.stealth ? (this.gun.w.range * 0.8) ** 2 : 900)))) { bd = d; best = f; } // döyüşdə əsgər hər tərəfə baxır: tüfəng məsafəsindəki düşməni görür
       }
       this.target = best;
       if (!had && this.target && !this.ally) { // həyəcan: yalnız ən yaxın 4 yoldaş (30 m) gəlir — hamısı birdən tökülmür
@@ -165,7 +165,10 @@ export class Unit implements Target {
       const charge = !!w.bayonet && this.ally && ctx.order === "attack" && d < 40; // hücum əmrində 40 m-dən süngü həmləsi
       const want = w.melee || charge ? 2 : Math.min(w.range * 0.6, 25);
       const blocked = this.blk;
-      if (d > want || blocked) { goal = this.target.pos; speed = this.type.speed * 1.3; }
+      // «izlə» əmrində: dəstədən ayrılıb düşmənin dalınca qaçmır — sənin yanında qalıb atır (özünü və səni qoruyur); topçu topun yanında qalır
+      const stay = this.ally && !charge && !w.melee && (this.hold || ctx.order === "follow");
+      if (stay) { goal = this.hold ?? this.slotPos(ctx); if (Vector3.Distance(goal, this.pos) < 2) goal = null; else speed = this.type.speed * (Vector3.Distance(goal, this.pos) > 15 ? 1.6 : 1); }
+      else if (d > want || blocked) { goal = this.target.pos; speed = this.type.speed * 1.3; }
       this.face(this.target.pos);
       if (bay && this.shotT <= -0.4) { // süngü zərbəsi (sursat xərcləmir)
         this.shotT = 0.7; this.melee = true;
@@ -177,12 +180,11 @@ export class Unit implements Target {
         if (!w.melee) ctx.onShot(this.pos.add(new Vector3(0, 1.5, 0)), this.target.pos.add(new Vector3(0, 1.2, 0)), hit, w.id);
       }
     } else if (this.ally) {
-      const ring = Math.floor(ctx.slot / 12), ang = ((ctx.slot % 12) / 12) * Math.PI * 2 + ring * 0.3, rr = 4 + ring * 2.5; // dəstə halqalarla izləyir
       if (ctx.order === "attack" && this.alert && Math.hypot(this.alert.x - this.pos.x, this.alert.z - this.pos.z) < 6) this.alert = null;
       if (ctx.order === "attack" && !this.alert && (this.think > 0.2)) { // növbəti hədəf: ən yaxın canlı düşmən (200 m)
         let bd = 40000; for (const f of ctx.foes) { if (!f.alive) continue; const d = (f.pos.x - this.pos.x) ** 2 + (f.pos.z - this.pos.z) ** 2; if (d < bd) { bd = d; this.alert = f.pos.clone(); } }
       }
-      goal = this.hold ? this.hold : ctx.order === "follow" ? ctx.leader.add(new Vector3(Math.cos(ang) * rr, 0, Math.sin(ang) * rr)) : this.alert;
+      goal = this.hold ? this.hold : ctx.order === "follow" ? this.slotPos(ctx) : this.alert;
       const far = goal ? Vector3.Distance(goal, this.pos) : 0;
       speed = this.type.speed * (far > 40 ? 2 : far > 10 ? 1.3 : 0.7); // geri qalanda tələsir
     } else if (this.alert) {
@@ -210,6 +212,11 @@ export class Unit implements Target {
     else if (goal && !this.post) this.mesh.position.y += Math.abs(Math.sin((this.bob += dt * speed * 2.2))) * 0.08; // addım
   }
 
+  /** dəstədəki yeri: liderin ətrafında halqalar (12 nəfərlik) */
+  private slotPos(ctx: Ctx) {
+    const ring = Math.floor(ctx.slot / 12), ang = ((ctx.slot % 12) / 12) * Math.PI * 2 + ring * 0.3, rr = 4 + ring * 2.5;
+    return ctx.leader.add(new Vector3(Math.cos(ang) * rr, 0, Math.sin(ang) * rr));
+  }
   private face(p: Vector3) { this.facing = Math.atan2(p.x - this.pos.x, p.z - this.pos.z); }
 
   private move(goal: Vector3, step: number, grid: Grid, mates: Unit[]) {
