@@ -2,7 +2,7 @@
 // Kütlə (500+ döyüşçü) üçün: hər (növ, hal) cütü üçün bir «şablon» skeletli meş animasiya oynayır,
 // döyüşçülər onun instance-larıdır (bir çəkiliş) — hal dəyişəndə instance başqa şablona keçir.
 // Papaq/dəbilqə və silah baş/əl sümüyünə çəki ilə bağlanıb şablonun içinə birləşdirilir.
-import { AnimationGroup, LoadAssetContainerAsync, Matrix, Mesh, MultiMaterial, PBRMaterial, Color3, Scene, TransformNode, Vector3, VertexBuffer, type AssetContainer, type InstancedMesh, type Material } from "@babylonjs/core";
+import { AnimationGroup, LoadAssetContainerAsync, Matrix, Mesh, MultiMaterial, PBRMaterial, Color3, Scene, TransformNode, Vector3, VertexBuffer, VertexData, type AssetContainer, type InstancedMesh, type Material } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { Kit, vcMat } from "./kit";
 
@@ -11,7 +11,8 @@ export const CLIP: Record<AnimState, string> = { idle: "Idle_Loop", walk: "Walk_
 const DIR = "/assets/chars/";
 
 type Prop = (k: Kit) => unknown; // baş/əl mərkəzinə nisbətən (+z irəli, +y yuxarı)
-interface Look { outfit: string; tint: string; head?: Prop; hand?: Prop }
+/** glb — Blender modeli (public/assets/models/props.glb içində meş adı); yoxdursa Kit funksiyası işləyir */
+interface Look { outfit: string; tint: string; head?: Prop; hand?: Prop; glbHead?: string; glbHand?: string }
 
 export const hat = {
   bork: (k: Kit) => k.cyl(0.5, 0.26, 0.24, "#f2eee4", [0, 0.28, -0.05], [-0.22, 0, 0], 10).box(0.22, 0.45, 0.03, "#f2eee4", [0, 0.1, -0.2], [0.25, 0, 0]).cyl(0.08, 0.06, 0.08, "#d4a640", [0, 0.12, 0.12], [-0.2, 0, 0], 6),
@@ -44,8 +45,8 @@ export const LOOKS: Record<string, Look> = {
   yeniceri: { outfit: "Male_Ranger", tint: "#9a2a24", head: hat.bork, hand: arm.musket },
   ottoman: { outfit: "Male_Ranger", tint: "#3d6a40", head: hat.turban, hand: arm.sword },
   okcu: { outfit: "Male_Ranger", tint: "#5a6a34", head: hat.bork, hand: arm.bow },
-  turk: { outfit: "Male_Ranger", tint: "#7a7250", head: hat.kabalak, hand: arm.mauser },
-  isgalci: { outfit: "Male_Ranger", tint: "#4a5868", head: hat.helmet, hand: arm.mauser },
+  turk: { outfit: "Male_Ranger", tint: "#7a7250", head: hat.kabalak, hand: arm.mauser, glbHead: "kabalak", glbHand: "mauser" },
+  isgalci: { outfit: "Male_Ranger", tint: "#4a5868", head: hat.helmet, hand: arm.mauser, glbHead: "helmet", glbHand: "mauser" },
   mulki: { outfit: "Male_Peasant", tint: "#ffffff" },
   mulki2: { outfit: "Female_Peasant", tint: "#ffffff" },
   koylu: { outfit: "Male_Peasant", tint: "#c8d0e0", head: hat.kasa },
@@ -55,12 +56,12 @@ export class CharLib {
   private templates = new Map<string, Mesh[]>();
   /** ölüm anı üçün öz skeleti olan şablonlar (hər növə bir neçə): yıxılma əvvəldən oynayır */
   private dyingPool = new Map<string, { m: Mesh; ag: AnimationGroup; until: number; inst: InstancedMesh | null }[]>();
-  private constructor(private scene: Scene, private anims: AssetContainer, private outfits: Record<string, AssetContainer>) {}
+  private constructor(private scene: Scene, private anims: AssetContainer, private outfits: Record<string, AssetContainer>, private props: AssetContainer | null) {}
 
   static async load(scene: Scene): Promise<CharLib> {
-    const [anims, ...outs] = await Promise.all([LoadAssetContainerAsync(DIR + "UAL1.glb", scene),
+    const [props, anims, ...outs] = await Promise.all([LoadAssetContainerAsync("/assets/models/props.glb", scene).catch(() => null), LoadAssetContainerAsync(DIR + "UAL1.glb", scene),
       ...["Male_Ranger", "Male_Peasant", "Female_Peasant"].map((o) => LoadAssetContainerAsync(DIR + o + ".gltf", scene))]);
-    return new CharLib(scene, anims, { Male_Ranger: outs[0], Male_Peasant: outs[1], Female_Peasant: outs[2] });
+    return new CharLib(scene, anims, { Male_Ranger: outs[0], Male_Peasant: outs[1], Female_Peasant: outs[2] }, props);
   }
   private broken = false;
   has(type: string) { return !this.broken && type in LOOKS; }
@@ -141,6 +142,17 @@ export class CharLib {
     for (const m of meshes) m.material = fix(m.material);
   }
 
+  /** Blender modeli: props.glb-dən meşin surəti (glTF kök güzgüsü geri alınır — +x sağ, +y yuxarı, +z irəli) */
+  private glbProp(name: string | undefined, mat: Material): Mesh | null {
+    const src = name ? (this.props?.meshes.find((m) => m.name === name) as Mesh | undefined) : undefined;
+    if (!src || !src.getTotalVertices()) return null;
+    const vd = VertexData.ExtractFromMesh(src, true, true);
+    vd.transform(Matrix.Scaling(-1, 1, 1).multiply(src.computeWorldMatrix(true)));
+    if (!vd.uvs) vd.uvs = new Float32Array((vd.positions!.length / 3) * 2); // birləşmə eyni atributları istəyir
+    const m = new Mesh("prop", this.scene); vd.applyToMesh(m, true); m.material = mat;
+    return m;
+  }
+
   private template(look: Look, state: AnimState, phase: number): Mesh {
     const inst = this.outfits[look.outfit].instantiateModelsToScene((n) => n, false, { doNotInstantiate: true });
     const root = inst.rootNodes[0] as TransformNode, skel = inst.skeletons[0];
@@ -152,19 +164,18 @@ export class CharLib {
     const bindPos = (bone: string) => Vector3.TransformCoordinates(nodes.get(bone)!.getAbsolutePosition(), inv);
     // aksesuarlar: meş fəzasında baş/əl yerinə qoyulur və 100% həmin sümüyə bağlanır
     const props: Mesh[] = [];
-    const add = (p: Prop | undefined, bone: string, off: Vector3) => {
+    const add = (p: Prop | undefined, bone: string, off: Vector3, glb?: string) => {
       if (!p) return;
-      const k = new Kit(this.scene); p(k);
       const pm = vcMat(this.scene, "vcProp", 0.25); pm.backFaceCulling = false;
-      const m = k.build("prop", pm), at = bindPos(bone).add(off), bi = skel.getBoneIndexByName(bone);
+      const m = this.glbProp(glb, pm) ?? (() => { const k = new Kit(this.scene); p(k); return k.build("prop", pm); })(), at = bindPos(bone).add(off), bi = skel.getBoneIndexByName(bone);
       m.position.copyFrom(at); m.bakeCurrentTransformIntoVertices();
       const n = m.getTotalVertices();
       m.setVerticesData(VertexBuffer.MatricesIndicesKind, new Float32Array(n * 4).map((_, i) => (i % 4 ? 0 : bi)));
       m.setVerticesData(VertexBuffer.MatricesWeightsKind, new Float32Array(n * 4).map((_, i) => (i % 4 ? 0 : 1)));
       m.skeleton = skel; props.push(m);
     };
-    add(look.head, "Head", new Vector3(0, 0.1, 0));
-    add(look.hand, "hand_r", new Vector3(0, 0, 0.05));
+    add(look.head, "Head", new Vector3(0, 0.1, 0), look.glbHead);
+    add(look.hand, "hand_r", new Vector3(0, 0, 0.05), look.glbHand);
     // birləşdirmə üçün eyni atribut dəsti: glTF hissələrinə ağ vertex rəngi, artıq atributlar silinir
     for (const m of parts) if (!m.isVerticesDataPresent(VertexBuffer.ColorKind)) m.setVerticesData(VertexBuffer.ColorKind, new Float32Array(m.getTotalVertices() * 4).fill(1));
     const all = [...parts, ...props], common = all.map((m) => m.getVerticesDataKinds()).reduce((a, b) => a.filter((k) => b.includes(k)));
