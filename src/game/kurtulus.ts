@@ -6,15 +6,15 @@ import { ColorCurves, DirectionalLight, HemisphericLight, ShadowGenerator, Verte
 import { Color3, Color4, DefaultRenderingPipeline, DynamicTexture, Engine, GlowLayer, ImageProcessingConfiguration, Mesh, MeshBuilder, ParticleSystem,
   PointLight, Ray, Scene, StandardMaterial, TransformNode, Vector3, type InstancedMesh, type LinesMesh } from "@babylonjs/core";
 import { UNITS, type ArmySetup, type GameMap } from "./data";
-import { heightAt } from "./logic";
+import { heightAt, Grid } from "./logic";
 import { Player } from "./player";
 import { Unit, setChars, type Target } from "./units";
 import { Sky } from "./sky";
-import { CharLib, hat } from "./chars";
+import { CharLib, hat, CLIP, type AnimState } from "./chars";
 import { Sfx } from "./audio";
 import { Kit, glowMat, vcMat } from "./kit";
 import { createHud, endScreen, pauseMenu } from "../ui/ui";
-import { AREA, buildKurtulus, COAST, COMPOUND, ENEMY_BARRACKS, GATE_HALF, HILLS, OUR_BARRACKS, TRENCH_X, TRENCH_Z } from "./kurtulus_world";
+import { AREA, buildKurtulus, COAST, COMPOUND, ENEMY_BARRACKS, GATE_HALF, HILLS, OUR_BARRACKS, TRENCH_X, TRENCH_Z, VALLEY } from "./kurtulus_world";
 import type { Quality } from "./world";
 
 const TEST = location.search.includes("test") || location.search.includes("map=");
@@ -172,17 +172,18 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   scene.skipPointerMovePicking = true;
   const low = quality === "low";
   const player = new Player(scene, setup.weapons.length ? setup.weapons : ["sniper", "m16"], canvas);
-  player.hp = player.maxHp = 300;
+  player.hp = player.maxHp = 1900;
   const lib = await CharLib.load(scene).catch((e) => { console.warn("personajlar yüklənmədi", e); return null; });
   setChars(lib);
-  if (lib) try { lib.warm(["turk", "isgalci"]); lib.warmDying(["isgalci"], low ? 4 : 6); lib.warmDying(["turk"], 3); } catch { setChars(null); }
+  if (lib) try { lib.warm(["turk", "isgalci"], Object.keys(CLIP) as AnimState[]); lib.warmDying(["isgalci"], low ? 4 : 6); lib.warmDying(["turk"], 3); } catch { setChars(null); }
   Unit.falling = []; Unit.onDeath = null;
   if (lib) player.useChar(lib, { tint: "#6e6646", head: hat.kabalak, outfit: "Turk_Soldier", glbHead: "kabalak" });
   player.camera.maxZ = 6000; player.camera.minZ = 0.4;
   const sky = new Sky(scene, player.camera, quality, map.startHour ?? 6.05);
   sky.fixedWeather = true; sky.weather = "aydın"; sky.speed = 1 / 900; // sübh uzun sürür (1 saat = 15 dəq)
   { const dome = scene.meshes.find((m) => m.name === "dome" && m.infiniteDistance); if (dome) dome.scaling.setAll(2.8); } // dəniz üfüqü günbəzin içində qalsın
-  const { grid, anchors, posts, sea } = buildKurtulus(scene, quality);
+  const { grid, anchors, posts, sea, covers } = buildKurtulus(scene, quality);
+  const coverGrid = new Grid(); for (const c of covers) coverGrid.add(c); // qayalar, ot tayaları — əsgərlər arxasında gizlənir
 
   // günəş: dənizdən yarımçıq çıxıb (aşağı yarısı dənizin arxasında qalır)
   const sunDisc = MeshBuilder.CreatePlane("sunDisc", { size: 430 }, scene), halo = MeshBuilder.CreatePlane("sunHalo", { size: 1900 }, scene);
@@ -351,6 +352,21 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     const z = Math.max(-GATE_HALF + 3, Math.min(GATE_HALF - 3, p.z)), atGate = Math.abs(p.x - COMPOUND.x1) < 7 && Math.abs(p.z) < GATE_HALF - 1;
     return gateP.set(atGate ? (pin ? COMPOUND.x1 + 6 : COMPOUND.x1 - 6) : (pin ? COMPOUND.x1 - 6 : COMPOUND.x1 + 6), 0, z);
   };
+  // F — hücum: 10-luq qruplar, aralarında 20 m; hər qrup öz zolağında qabaqdakı ən yaxın düşmənə doğru 40 m-lik sıçrayışlarla irəliləyir
+  let sqT = 0;
+  const assignSquads = () => {
+    if (order !== "attack") { for (const a of allies) a.squadGoal = null; return; }
+    const live = allies.filter((a) => a.alive && !a.hold), K = Math.ceil(live.length / 10);
+    for (let k = 0; k < K; k++) {
+      const g = live.slice(k * 10, k * 10 + 10), cx = g.reduce((s, u) => s + u.pos.x, 0) / g.length;
+      const laneZ = Math.max(-VALLEY + 30, Math.min(VALLEY - 30, player.pos.z + (k - (K - 1) / 2) * 20));
+      let best: Unit | null = null, bd = 1e12;
+      for (const e of enemies) { if (!e.alive || e.pos.x < cx - 30) continue; const d = (e.pos.x - cx) ** 2 + ((e.pos.z - laneZ) * 2) ** 2; if (d < bd) { bd = d; best = e; } }
+      if (!best) { for (const u of g) u.squadGoal = null; continue; }
+      const gx = Math.min(best.pos.x - 6, cx + 40);
+      g.forEach((u, i) => { (u.squadGoal ??= new Vector3()).set(gx + (i % 2) * 1.5, 0, laneZ + (i - 4.5) * 2.2); });
+    }
+  };
   let paused = false, ended = false, hudT = 0, slowT = 0, frame = 0, msgT = 10, gameTime = 0, battle = false, order: "follow" | "attack" = "follow";
   let msg = "Sübh çağıdır. Kazarmadan çıx, otlaqdan keç, 10 səngəri sahilə qədər təmizlə. Son səngərə çatanda gəmilərdən qayıqla düşmən çıxacaq. G — 3 əsgəri topa göndər · E — topa keç (hara nişan alsan ora düşür) · F — hücum/izlə.";
   function say(m: string, t = 3) { msg = m; msgT = t; }
@@ -374,7 +390,8 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
       free.forEach((a, i) => { const an = i * 2.1 + 2.4; a.hold = g.pos.add(new Vector3(Math.sin(an) * (g.big ? 7 : 3.2), 0, Math.cos(an) * (g.big ? 7 : 3.2))); });
       say(`${free.length} əsgər ${g.big ? "böyük topa" : "topa"} gedir (${Math.round(Vector3.Distance(g.pos, player.pos))} m)`, 3);
     }
-    if (e.code === "KeyH") { for (const a of allies) a.hold = null; say("Top heyətləri geri çağırıldı", 2); }
+    if (e.code === "KeyH") { // geri çağır: topçular da gəlir, dəstə atəş aça-aça yanına çəkilir
+      for (const a of allies) { a.hold = null; a.squadGoal = null; } order = "follow"; say("Geri çəkilin! Atəşi kəsməyin!", 2.5); }
   };
   addEventListener("keydown", onKey);
   const lockChange = () => { if (document.pointerLockElement !== canvas && !ended && !paused) { paused = true; pauseMenu(() => { paused = false; hudRebuild(); lockSafe(); }, quit); } };
@@ -460,7 +477,8 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
       if (!battle && (pp.x > TRENCH_X[0] - 150 || enemies.some((e) => e.alive && e.target))) { battle = true; say("Döyüş başladı! Toplara heyət göndər (G) — gəmiləri vursunlar.", 4); }
       if (!landing && pp.x > TRENCH_X[8] - 60) { landing = true; ships.forEach((s) => (s.cool = Math.random() * 10)); say("Gəmilərdən qayıqlar endirilir! Sahilə çıxanları vur, toplarla qayıqları batır!", 5); }
     }
-    allies.forEach((u, i) => u.update(dt, { foes: enemies, night: false, fog: 0, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked, via: viaGate }));
+    if ((sqT -= dt) <= 0) { sqT = 0.5; assignSquads(); }
+    allies.forEach((u, i) => u.update(dt, { foes: enemies, night: false, fog: 0, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked, via: viaGate, covers: coverGrid }));
     const foes: Target[] = [player, ...allies];
     for (const u of enemies) {
       if (!u.alive) continue;
@@ -468,7 +486,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
       if (u.dist > 300 && !busy) continue;
       u.acc += dt;
       if (u.dist > 120 && !busy && (frame + (u.hp | 0)) % 4) continue;
-      u.update(u.acc, { foes, night: false, fog: 0, leader: pp, order, grid, mates: enemies, onShot: shot, slot: 0, blocked });
+      u.update(u.acc, { foes, night: false, fog: 0, leader: pp, order, grid, mates: enemies, onShot: shot, slot: 0, blocked, covers: coverGrid });
       u.acc = 0;
       if (u.target && u.fort.startsWith("t")) { // səngərdə vuruşma başladı — yaxın kazarma köməyə gəlir
         const bi = ENEMY_BARRACKS.reduce((b, q, j) => (Math.abs(q.x - u.pos.x) < Math.abs(ENEMY_BARRACKS[b].x - u.pos.x) ? j : b), 0);

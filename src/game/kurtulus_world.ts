@@ -18,6 +18,8 @@ export const COMPOUND = { x0: -1345, x1: -1190, z0: -95, z1: 95 }; // kazarma di
 export const GATE_HALF = 20;
 export const MEADOW = { x0: -1185, x1: -1015 }; // otlaq və samanlıq
 export const VILLAGE = { x: -1300, z: 0, r: 175 };
+/** sığınacaq: arxasında gizlənib döyüşmək olar (h — hündürlük) */
+export type Cover = { x: number; z: number; r: number; h: number; n: number };
 export const VALLEY = 310; // |z| > VALLEY — dağ yamacı başlayır
 /** oyun meydanı: uzunluq — kənddən gəmilərə qədər, en — iki dağ arası */
 export const AREA = { x0: -1460, x1: 1500, z0: -340, z1: 340 };
@@ -108,13 +110,15 @@ export function buildKurtulus(scene: Scene, quality: Quality) {
 
   const sea = buildSea(scene);
   buildVillage(scene, grid, anchors);
-  buildMeadow(scene, grid);
+  const covers: Cover[] = [];
+  buildMeadow(scene, grid, covers);
   ENEMY_BARRACKS.forEach((b, i) => buildEnemyBarracks(scene, grid, b.x, b.z, i));
   const posts = buildTrenches(scene, quality);
   buildHillRoad(scene);
   buildVegetation(scene, quality);
   buildCraters(scene);
-  return { ground, grid, anchors, posts, sea };
+  buildRocks(scene, grid, covers);
+  return { ground, grid, anchors, posts, sea, covers };
 }
 
 // --- dəniz: prosedur dalğa normalı (hər kadr sürüşür) + günəşə doğru parıltı ---
@@ -199,14 +203,14 @@ function buildVillage(scene: Scene, grid: Grid, anchors: Vector3[]) {
 }
 
 // --- 200 m otlaq və samanlıq: taya, rulon, taxta hasar ---
-function buildMeadow(scene: Scene, grid: Grid) {
+function buildMeadow(scene: Scene, grid: Grid, covers: Cover[]) {
   const k = new Kit(scene), r = rng(41);
   k.texMap = { [WOOD]: TM[WOOD] };
   for (let i = 0; i < 34; i++) { // ot tayaları
     const x = MEADOW.x0 + 15 + r() * (MEADOW.x1 - MEADOW.x0 - 30), z = (r() - 0.5) * 2 * (VALLEY - 40), y = heightAt(x, z);
     if (Math.abs(z) < 26) continue; // yol (darvaza qədər enli)
     k.cyl(2.2, 3.6, 4.2, HAY, [x, y + 1.0, z], undefined, 10).cyl(2.2, 0.3, 3.6, "#b8964a", [x, y + 3.2, z], undefined, 10).cyl(4.6, 0.12, 0.12, WOOD, [x, y + 2.6, z], undefined, 5);
-    grid.add({ x, z, r: 2.1 });
+    grid.add({ x, z, r: 2.1 }); covers.push({ x, z, r: 2.1, h: 3.2, n: 0 });
   }
   for (let i = 0; i < 70; i++) { // rulon samanlar
     const x = MEADOW.x0 + 10 + r() * (MEADOW.x1 - MEADOW.x0 - 20), z = (r() - 0.5) * 2 * (VALLEY - 40);
@@ -219,6 +223,23 @@ function buildMeadow(scene: Scene, grid: Grid) {
     k.box(0.15, 1.3, 0.15, WOOD, [x, y + 0.6, z]).box(0.08, 0.12, 4, WOOD, [x, y + 0.9, z + 2]).box(0.08, 0.12, 4, WOOD, [x, y + 0.45, z + 2]);
   }
   for (const m of k.buildAll("meadow", vcMat(scene, "vcWorld", 0.05))) { m.isPickable = false; m.freezeWorldMatrix(); }
+}
+
+// --- qayalar: əsgər boyundan ~1 m hündür (2.6–3.3 m) — arxasında gizlənib yandan atəş açırlar ---
+function buildRocks(scene: Scene, grid: Grid, covers: Cover[]) {
+  const k = new Kit(scene), r = rng(77);
+  k.texMap = { [STONE]: TM[STONE] };
+  for (let i = 0, n = 0; i < 4000 && n < 170; i++) {
+    const x = MEADOW.x1 + 20 + r() * (COAST - 60 - MEADOW.x1 - 20), z = (r() - 0.5) * 2 * (VALLEY - 45);
+    if (nearTrench(x, z, 14) || onLink(x, z, 6) || onRoad(x, z) || Math.abs(z) < 8 ||
+      FLAT.some((f) => Math.hypot(x - f.x, z - f.z) < f.r + 4) || HILLS.some((h) => Math.hypot(x - h.x, z - h.z) < (h.big ? 30 : 14)) ||
+      covers.some((c) => Math.hypot(c.x - x, c.z - z) < 14)) continue;
+    const h = 2.6 + r() * 0.7, rad = 1.3 + r() * 0.9, y = heightAt(x, z), a = r() * 6;
+    k.sph(1, STONE, [x, y + h * 0.42, z], [rad * 2, h * 1.12, rad * 1.7], 6)
+      .sph(1, STONE, [x + Math.sin(a) * rad * 0.6, y + h * 0.25, z + Math.cos(a) * rad * 0.6], [rad * 1.5, h * 0.7, rad * 1.4], 5);
+    grid.add({ x, z, r: rad }); covers.push({ x, z, r: rad, h, n: 0 }); n++;
+  }
+  for (const m of k.buildAll("rocks", vcMat(scene, "vcWorld", 0.05))) { m.metadata = { solid: true }; m.freezeWorldMatrix(); }
 }
 
 // --- düşmən kazarması: uzun bina, çadırlar, qum torbası halqası ---

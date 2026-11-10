@@ -286,6 +286,7 @@ export class Player implements Target {
     if (g.w.id === "sniper" && !this.aiming) spread = Math.max(spread, 0.03);
     const { point, unit } = this.aim(g.w.range, spread);
     if (unit && !unit.ally) { unit.hit(g.w.dmg, this.pos); this.hitFlash = 0.15; }
+    for (const u of units) if (u !== unit && !u.ally && u.alive && u.shotAt && Vector3.DistanceSquared(u.pos, point) < 16) u.shotAt(this.pos); // güllə yanından keçdi — gizlənir/yuvarlanır
     onShot(from, point, !!unit);
     this.lastNoise = g.w.noise;
   }

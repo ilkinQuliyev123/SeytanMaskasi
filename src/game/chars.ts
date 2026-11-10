@@ -6,8 +6,10 @@ import { AnimationGroup, LoadAssetContainerAsync, Matrix, Mesh, MultiMaterial, P
 import "@babylonjs/loaders/glTF";
 import { Kit, vcMat } from "./kit";
 
-export type AnimState = "idle" | "walk" | "run" | "attack" | "shoot" | "dead";
-export const CLIP: Record<AnimState, string> = { idle: "Idle_Loop", walk: "Walk_Loop", run: "Jog_Fwd_Loop", attack: "Sword_Attack", shoot: "Pistol_Shoot", dead: "Death01" };
+export type AnimState = "idle" | "walk" | "run" | "attack" | "shoot" | "dead" | "crouch" | "crouchWalk" | "prone" | "roll";
+/** Prone_Loop — Blender-də yığılıb (blender/scripts/prone.py → Soldier_Anims.glb), qalanı UAL1 */
+export const CLIP: Record<AnimState, string> = { idle: "Idle_Loop", walk: "Walk_Loop", run: "Jog_Fwd_Loop", attack: "Sword_Attack", shoot: "Pistol_Shoot", dead: "Death01",
+  crouch: "Crouch_Idle_Loop", crouchWalk: "Crouch_Fwd_Loop", prone: "Prone_Loop", roll: "Roll" };
 const DIR = "/assets/chars/";
 
 type Prop = (k: Kit) => unknown; // baş/əl mərkəzinə nisbətən (+z irəli, +y yuxarı)
@@ -65,10 +67,12 @@ export class CharLib {
   private constructor(private scene: Scene, private anims: AssetContainer, private outfits: Record<string, AssetContainer>, private props: AssetContainer | null) {}
 
   static async load(scene: Scene): Promise<CharLib> {
-    const [props, anims, ...outs] = await Promise.all([LoadAssetContainerAsync("/assets/models/props.glb", scene).catch(() => null), LoadAssetContainerAsync(DIR + "UAL1.glb", scene),
+    const [extra, props, anims, ...outs] = await Promise.all([LoadAssetContainerAsync(DIR + "Soldier_Anims.glb", scene).catch(() => null),
+      LoadAssetContainerAsync("/assets/models/props.glb", scene).catch(() => null), LoadAssetContainerAsync(DIR + "UAL1.glb", scene),
       ...OUTFITS.map((o) => LoadAssetContainerAsync(DIR + o + ".gltf", scene).catch((e) => { if (o in SOLDIER) return null; throw e; }))]);
     const map: Record<string, AssetContainer> = {};
     OUTFITS.forEach((o, i) => { const c = outs[i] ?? outs[0]; if (c) map[o] = c; }); // Blender əsgəri yüklənməsə — köhnə Ranger
+    if (extra) anims.animationGroups.push(...extra.animationGroups); // əlavə kliplər (uzanma) eyni skelet adları ilə
     return new CharLib(scene, anims, map, props);
   }
   private broken = false;
@@ -82,7 +86,7 @@ export class CharLib {
     }
   }
   /** bütün şablonları əvvəlcədən hazırla (oyun zamanı ilişmə olmasın) */
-  warm(types: string[]) { for (const t of types) for (const s of Object.keys(CLIP) as AnimState[]) this.instance(t, s).dispose(); }
+  warm(types: string[], states: AnimState[] = ["idle", "walk", "run", "attack", "shoot", "dead"]) { for (const t of types) for (const s of states) this.instance(t, s).dispose(); }
 
   /** ölüm hovuzunu əvvəlcədən hazırla (oyun ortasında ilişmə olmasın) */
   warmDying(types: string[], n = 3) {
@@ -195,7 +199,7 @@ export class CharLib {
     if (!merged) throw new Error("personaj birləşmədi: " + look.outfit);
     merged.skeleton = skel; merged.parent = parent; merged.isVisible = false; merged.isPickable = true;
     merged.alwaysSelectAsActiveMesh = true; // instance-lar hər yerdə — şablon kəsilməsin
-    const src = this.anims.animationGroups.find((g) => g.name === CLIP[state])!;
+    const src = this.anims.animationGroups.find((g) => g.name === CLIP[state]) ?? this.anims.animationGroups.find((g) => g.name === "Crouch_Idle_Loop")!;
     const ag = src.clone(src.name + state + phase, (t) => nodes.get(t.name) ?? null);
     ag.start(state !== "dead", state === "attack" ? 1.2 : 1);
     if (state !== "dead") ag.goToFrame(ag.from + (ag.to - ag.from) * phase);
