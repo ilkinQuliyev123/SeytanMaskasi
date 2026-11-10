@@ -3,3 +3,4 @@ dist/
 .env
 assets-raw/
 __pycache__/
+*.blend1

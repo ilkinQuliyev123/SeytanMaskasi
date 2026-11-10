@@ -163,8 +163,18 @@ Son commit-lər GitHub-dadır (`3dee403` və əvvəlki). **Xəritə 2 — Qurtul
 - Blender skills paketi (96 bacarıq) `C:\Users\ILKIN\.claude\skills`-də quruludur.
 - İş qaydası: Blender-də model → GLB ixrac (`public/assets/...`) → Blender-i bağla → oyunu yoxla (3.9 GB RAM ikisinə çatmır). Hər modelin təpə sayına limit (FPS).
 
+## Vəziyyət (10.11.2026 — Blender işi + döyüş taktikası; son commit 0d47244+)
+- Blender MCP qoşulub (istifadəçi qoşdu). Blender bağlı olanda: `E:/Blender/blender-4.5.15-windows-x64/blender.exe -b <blend> --python blender/scripts/X.py -- args`.
+- Yeni əsgərlər: `public/assets/chars/Turk_Soldier.gltf`, `Enemy_Soldier.gltf` (+ `soldier_tex/`), mənbə `blender/soldiers.blend` (~9k təpə, köhnə Ranger 25k idi). Rekvizit: `public/assets/models/props.glb` (mauser, kabalak, helmet; mənbə `blender/props.blend`). Baş rekviziti HEAD_UP=0.155 yuxarı.
+- `Soldier_Anims.glb` — Prone_Loop (uzanıb atəş), `blender/scripts/prone.py` ilə.
+- Kazarma qapısı GATE_HALF=20, `viaGate` marşrutu. Follow rejimində əsgərlər özünü müdafiə edir.
+- Taktika (units.ts, hər iki tərəf eyni kod): stance stand/crouch/prone/roll, `evade` (vurulma əmsalı), `shotAt` (30% yana yuvarlanma), qaya/taya arxasında gizlənib yandan atəş (covers Grid; 170 qaya h 2.6–3.3). Fərqlər: türk hp 130/sür 4.4, düşmən 120/4.1; yalnız türklərdə F-10-luq qruplar 20 m aralı (assignSquads), H — atəşlə geri çəkilmə, süngü həmləsi, 360° görmə; yalnız düşməndə həyəcan (4 yaxın yoldaş) və səngər postları.
+- Oyunçu canı 1900. Headless Edge-də FPS 0 — hərəkət/taktika yalnız istifadəçinin oyununda yoxlanır.
+- İstifadəçi CoD MW səviyyəsi istədi — 840M üçün real deyil dedim; təklif: FP M16/snayper Blender-də normal/AO bişirilmiş PBR, forma parça teksturası, tüfəng animasiyaları.
+
 ## Növbəti (istifadəçi qayıdanda)
-1. Soruş: Blender addımları edildimi? FPS neçədir (NVIDIA ilə)?
+1. Soruş: FPS neçədir (NVIDIA ilə)? Taktika oyunda necə görünür?
+   - Növbəti Blender işi: FP M16/snayper (PBR), tüfəng nişan/atəş/süngü animasiyaları (indi Pistol_Shoot/Sword_Attack).
 2. Blender qoşulubsa: əvvəl türk əsgəri + süngülü tüfəng (aşağı-poli; mövcud UAL skeletinə uyğun), sonra gəmi, top, binalar → GLB.
 3. FPS 60 deyilsə: əsgər sayı / ot məsafəsi, uzaq ağacları gizlət, relyef materialını ucuzlaşdır.
 4. Xəritə 2-də yoxlanmayanlar: G ilə topa heyət, gəmi/qayıq batırma, desant, süngü; kənd və böyük təpə görüntüsü; dağların rəngi (dumanda çox açıq).
