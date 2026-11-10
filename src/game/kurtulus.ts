@@ -14,7 +14,7 @@ import { CharLib, hat } from "./chars";
 import { Sfx } from "./audio";
 import { Kit, glowMat, vcMat } from "./kit";
 import { createHud, endScreen, pauseMenu } from "../ui/ui";
-import { AREA, buildKurtulus, COAST, ENEMY_BARRACKS, HILLS, OUR_BARRACKS, TRENCH_X, TRENCH_Z } from "./kurtulus_world";
+import { AREA, buildKurtulus, COAST, COMPOUND, ENEMY_BARRACKS, GATE_HALF, HILLS, OUR_BARRACKS, TRENCH_X, TRENCH_Z } from "./kurtulus_world";
 import type { Quality } from "./world";
 
 const TEST = location.search.includes("test") || location.search.includes("map=");
@@ -248,7 +248,8 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   { const at = new URLSearchParams(location.search).get("at"); // yoxlama: ?at=coast | hill | trench
     if (at === "coast") { player.pos.set(COAST - 25, 0, 40); player.yaw = Math.PI / 2 + 0.25; }
     if (at === "hill") { player.pos.set(HILLS[0].x - 12, 0, HILLS[0].z + 4); player.yaw = Math.PI / 2 - 0.1; player.pitch = 0.12; }
-    if (at === "trench") { player.pos.set(TRENCH_X[2] - 40, 0, 20); player.yaw = Math.PI / 2; } }
+    if (at === "trench") { player.pos.set(TRENCH_X[2] - 40, 0, 20); player.yaw = Math.PI / 2; }
+    if (at === "meadow") { player.pos.set(COMPOUND.x1 + 45, 0, 0); player.yaw = -Math.PI / 2; player.pitch = 0.1; } }
   const enemies: Unit[] = [];
   const trenchOf = (bi: number) => TRENCH_X.map((x, i) => ({ x, i })).filter(({ x }) => ENEMY_BARRACKS.reduce((b, q, j) => (Math.abs(q.x - x) < Math.abs(ENEMY_BARRACKS[b].x - x) ? j : b), 0) === bi).map((t) => t.i);
   ENEMY_BARRACKS.forEach((b, bi) => {
@@ -341,6 +342,15 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   const blocked = (a: Vector3, b: Vector3) => { const d = b.subtract(a), len = d.length(); return !!scene.pickWithRay(new Ray(a, d.scaleInPlace(1 / len), len), (m) => !!m.metadata?.solid, true)?.hit; };
 
   // --- idarəetmə ---
+  // kazarma həyəti divarla əhatəlidir: içəridən çölə (və ya əksinə) gedən əsgər əvvəl darvazaya yönəlir, divara dirənmir
+  const inYard = (v: Vector3) => v.x > COMPOUND.x0 && v.x < COMPOUND.x1 && v.z > COMPOUND.z0 && v.z < COMPOUND.z1;
+  const gateP = new Vector3();
+  const viaGate = (p: Vector3, g: Vector3) => {
+    const pin = inYard(p);
+    if (pin === inYard(g)) return g;
+    const z = Math.max(-GATE_HALF + 3, Math.min(GATE_HALF - 3, p.z)), atGate = Math.abs(p.x - COMPOUND.x1) < 7 && Math.abs(p.z) < GATE_HALF - 1;
+    return gateP.set(atGate ? (pin ? COMPOUND.x1 + 6 : COMPOUND.x1 - 6) : (pin ? COMPOUND.x1 - 6 : COMPOUND.x1 + 6), 0, z);
+  };
   let paused = false, ended = false, hudT = 0, slowT = 0, frame = 0, msgT = 10, gameTime = 0, battle = false, order: "follow" | "attack" = "follow";
   let msg = "Sübh çağıdır. Kazarmadan çıx, otlaqdan keç, 10 səngəri sahilə qədər təmizlə. Son səngərə çatanda gəmilərdən qayıqla düşmən çıxacaq. G — 3 əsgəri topa göndər · E — topa keç (hara nişan alsan ora düşür) · F — hücum/izlə.";
   function say(m: string, t = 3) { msg = m; msgT = t; }
@@ -450,7 +460,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
       if (!battle && (pp.x > TRENCH_X[0] - 150 || enemies.some((e) => e.alive && e.target))) { battle = true; say("Döyüş başladı! Toplara heyət göndər (G) — gəmiləri vursunlar.", 4); }
       if (!landing && pp.x > TRENCH_X[8] - 60) { landing = true; ships.forEach((s) => (s.cool = Math.random() * 10)); say("Gəmilərdən qayıqlar endirilir! Sahilə çıxanları vur, toplarla qayıqları batır!", 5); }
     }
-    allies.forEach((u, i) => u.update(dt, { foes: enemies, night: false, fog: 0, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked }));
+    allies.forEach((u, i) => u.update(dt, { foes: enemies, night: false, fog: 0, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked, via: viaGate }));
     const foes: Target[] = [player, ...allies];
     for (const u of enemies) {
       if (!u.alive) continue;

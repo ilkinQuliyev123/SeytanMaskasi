@@ -14,6 +14,8 @@ export type Post = { y: number; face: number };
 export type Ctx = {
   foes: Target[]; night: boolean; fog: number; leader: Vector3; order: "follow" | "attack"; grid: Grid; mates: Unit[];
   onShot: (from: Vector3, to: Vector3, hit: boolean, kind?: string) => void; slot: number; blocked?: (a: Vector3, b: Vector3) => boolean;
+  /** yol göstərən: hədəfə birbaşa getmək olmursa aralıq nöqtə (məs. həyətdən darvaza ilə çıx) */
+  via?: (from: Vector3, goal: Vector3) => Vector3;
 };
 
 const bases = new Map<string, Mesh>();
@@ -198,7 +200,7 @@ export class Unit implements Target {
       goal = this.wp;
     }
     if (this.post) goal = null; // keşikçi yerindən tərpənmir
-    if (goal) this.move(goal, speed * dt, ctx.grid, ctx.mates);
+    if (goal) this.move(ctx.via ? ctx.via(this.pos, goal) : goal, speed * dt, ctx.grid, ctx.mates);
     this.place();
     if (this.anim) { // hal 0.3 s dəyişməz qalanda keçid (titrəmə olmasın); uzaqda heç keçmir
       const s: AnimState = this.shotT > 0 ? (w.melee || this.melee ? "attack" : "shoot") : this.moved > 0.004 ? (speed > this.type.speed ? "run" : "walk") : "idle";

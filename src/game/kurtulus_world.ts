@@ -14,6 +14,8 @@ export const TRENCH_Z = 245; // səngərlər vadinin bütün enində
 export const COAST = 960; // su xətti
 export const OUR_BARRACKS = { x: -1290, z: 0 };
 export const COMPOUND = { x0: -1345, x1: -1190, z0: -95, z1: 95 }; // kazarma divarları (darvaza şərqdə)
+/** darvazanın yarım eni: 100 əsgər birlikdə çıxa bilsin (40 m) */
+export const GATE_HALF = 20;
 export const MEADOW = { x0: -1185, x1: -1015 }; // otlaq və samanlıq
 export const VILLAGE = { x: -1300, z: 0, r: 175 };
 export const VALLEY = 310; // |z| > VALLEY — dağ yamacı başlayır
@@ -162,22 +164,22 @@ function buildVillage(scene: Scene, grid: Grid, anchors: Vector3[]) {
   k.box(0.15, 3.2, 3.6, WOOD, [B.x + 7.05, by + 1.6, B.z]);
   rect(grid, B.x, B.z, 14, 50, 0);
   anchors.push(new Vector3(B.x + 8, by + 3, B.z));
-  // kazarma divarları: 2.6 m daş divar, şərqdə 12 m darvaza
+  // kazarma divarları: 2.6 m daş divar, şərqdə 40 m enli darvaza (bütün dəstə birlikdə çıxır)
   const C = COMPOUND, wall = (x1: number, z1: number, x2: number, z2: number) => {
     const L = Math.hypot(x2 - x1, z2 - z1), a = Math.atan2(x2 - x1, z2 - z1), cx = (x1 + x2) / 2, cz = (z1 + z2) / 2, y = heightAt(cx, cz) - 0.4;
     k.box(1, 2.9, L, STONE, [cx, y + 1.45, cz], [0, a, 0]).box(1.3, 0.3, L + 0.3, STONE, [cx, y + 3, cz], [0, a, 0]);
     segObs(grid, x1, z1, x2, z2, 0.8);
   };
   wall(C.x0, C.z0, C.x1, C.z0); wall(C.x0, C.z1, C.x1, C.z1); wall(C.x0, C.z0, C.x0, C.z1);
-  wall(C.x1, C.z0, C.x1, -6); wall(C.x1, 6, C.x1, C.z1);
-  for (const s of [-1, 1]) k.box(2.4, 6, 2.4, STONE, [C.x1, heightAt(C.x1, s * 7.2) + 2.6, s * 7.2]);
-  k.box(1, 1.2, 15, STONE, [C.x1, heightAt(C.x1, 0) + 5.2, 0]);
-  // bayraq: darvazanın üstündə
-  const fy = heightAt(C.x1, 0);
-  k.box(0.3, 8, 0.3, WOOD, [C.x1 - 1, fy + 9, 0]);
-  const flag = new Kit(scene); flag.box(0.05, 2.2, 3.4, "#c8102e", [C.x1 - 1, fy + 11.6, 1.8]);
-  flag.cyl(0.05, 0.7, 0.7, "#ffffff", [C.x1 - 0.97, fy + 11.7, 1.6], [0, 0, Math.PI / 2], 14).cyl(0.06, 0.6, 0.6, "#c8102e", [C.x1 - 0.96, fy + 11.7, 1.75], [0, 0, Math.PI / 2], 14)
-    .box(0.06, 0.25, 0.25, "#ffffff", [C.x1 - 0.95, fy + 11.7, 2.25], [Math.PI / 4, 0, 0]);
+  const G = GATE_HALF;
+  wall(C.x1, C.z0, C.x1, -G); wall(C.x1, G, C.x1, C.z1);
+  for (const s of [-1, 1]) { k.box(2.6, 6, 2.6, STONE, [C.x1, heightAt(C.x1, s * (G + 1.2)) + 2.6, s * (G + 1.2)]); grid.add({ x: C.x1, z: s * (G + 1.2), r: 1.6 }); }
+  // bayraq: şimal darvaza sütununun yanında (keçidə mane olmasın)
+  const FZ = G + 1.2, fy = heightAt(C.x1, FZ);
+  k.box(0.3, 8, 0.3, WOOD, [C.x1 - 1, fy + 9, FZ]);
+  const flag = new Kit(scene); flag.box(0.05, 2.2, 3.4, "#c8102e", [C.x1 - 1, fy + 11.6, FZ + 1.8]);
+  flag.cyl(0.05, 0.7, 0.7, "#ffffff", [C.x1 - 0.97, fy + 11.7, FZ + 1.6], [0, 0, Math.PI / 2], 14).cyl(0.06, 0.6, 0.6, "#c8102e", [C.x1 - 0.96, fy + 11.7, FZ + 1.75], [0, 0, Math.PI / 2], 14)
+    .box(0.06, 0.25, 0.25, "#ffffff", [C.x1 - 0.95, fy + 11.7, FZ + 2.25], [Math.PI / 4, 0, 0]);
   flag.build("flag", vcMat(scene, "vcFlag", 0.1)).isPickable = false;
   // məscid
   const mx = VILLAGE.x - 90, mz = 130, my = heightAt(mx, mz) - 0.3;
@@ -202,17 +204,17 @@ function buildMeadow(scene: Scene, grid: Grid) {
   k.texMap = { [WOOD]: TM[WOOD] };
   for (let i = 0; i < 34; i++) { // ot tayaları
     const x = MEADOW.x0 + 15 + r() * (MEADOW.x1 - MEADOW.x0 - 30), z = (r() - 0.5) * 2 * (VALLEY - 40), y = heightAt(x, z);
-    if (Math.abs(z) < 14) continue; // yol
+    if (Math.abs(z) < 26) continue; // yol (darvaza qədər enli)
     k.cyl(2.2, 3.6, 4.2, HAY, [x, y + 1.0, z], undefined, 10).cyl(2.2, 0.3, 3.6, "#b8964a", [x, y + 3.2, z], undefined, 10).cyl(4.6, 0.12, 0.12, WOOD, [x, y + 2.6, z], undefined, 5);
     grid.add({ x, z, r: 2.1 });
   }
   for (let i = 0; i < 70; i++) { // rulon samanlar
     const x = MEADOW.x0 + 10 + r() * (MEADOW.x1 - MEADOW.x0 - 20), z = (r() - 0.5) * 2 * (VALLEY - 40);
-    if (Math.abs(z) < 12) continue;
+    if (Math.abs(z) < 24) continue;
     k.cyl(1.4, 1.5, 1.5, HAY, [x, heightAt(x, z) + 0.72, z], [0, r() * 3, Math.PI / 2], 10);
   }
   for (const x of [MEADOW.x0, MEADOW.x1]) for (let z = -VALLEY + 30; z < VALLEY - 30; z += 4) { // taxta hasarlar (ortada keçid)
-    if (Math.abs(z) < 16) continue;
+    if (Math.abs(z) < 24) continue;
     const y = heightAt(x, z);
     k.box(0.15, 1.3, 0.15, WOOD, [x, y + 0.6, z]).box(0.08, 0.12, 4, WOOD, [x, y + 0.9, z + 2]).box(0.08, 0.12, 4, WOOD, [x, y + 0.45, z + 2]);
   }
