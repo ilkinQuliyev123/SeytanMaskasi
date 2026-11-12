@@ -296,7 +296,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   let swatMounted = false, swatT = 0;
   const allCovers = { near: (x: number, z: number) => [...coverGrid.near(x, z), ...(swatMounted ? [] : cars.filter((c) => (c.p.x - x) ** 2 + (c.p.z - z) ** 2 < 70 * 70).map((c) => c.cover))] } as unknown as Grid;
   const seaActive = () => enemies.reduce((n, e) => n + (e.alive && e.fort === "sea" ? 1 : 0), 0) + boats.reduce((a, b) => a + b.n, 0) + apcs.reduce((a, b) => a + b.n, 0);
-  let sweepT = 0;
+  let sweepT = 0; const corpses: InstancedMesh[] = [];
   const enemies: Unit[] = [];
   const trenchOf = (bi: number) => TRENCH_X.map((x, i) => ({ x, i })).filter(({ x }) => ENEMY_BARRACKS.reduce((b, q, j) => (Math.abs(q.x - x) < Math.abs(ENEMY_BARRACKS[b].x - x) ? j : b), 0) === bi).map((t) => t.i);
   ENEMY_BARRACKS.forEach((b, bi) => {
@@ -564,10 +564,14 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
         u.update(dt, { foes: enemies, night: false, fog: 0, leader: c.p, order, grid, mates: swat, onShot: shot, slot: Math.floor(i / 9), blocked, covers: allCovers });
       });
     }
-    // ölən düşmənlər 25 s sonra səhnədən silinir (3000 nəfər yığılıb oyunu ağırlaşdırmasın)
     if ((sweepT -= dt) <= 0) {
       sweepT = 2;
-      for (let i = enemies.length - 1; i >= 0; i--) { const e = enemies[i] as Unit & { deadT?: number }; if (e.alive) continue; e.deadT = (e.deadT ?? 0) + 2; if (e.deadT > 25) { e.mesh.dispose(); e.far?.dispose(); enemies.splice(i, 1); } }
+      // ölənlər silinmir: meyit yerində qalır, amma «düşünən» siyahıdan çıxır və hərəkətsiz (dondurulmuş) sadə modelə keçir — yük vermir
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i] as Unit & { deadT?: number }; if (e.alive) continue; e.deadT = (e.deadT ?? 0) + 2;
+        if (e.deadT > 6) { let m = e.mesh; if (e.far) { e.mesh.dispose(); m = e.far; } m.isPickable = false; m.computeWorldMatrix(true); m.freezeWorldMatrix(); corpses.push(m); enemies.splice(i, 1); }
+      }
+      for (const m of corpses) m.isVisible = (m.position.x - pp.x) ** 2 + (m.position.z - pp.z) ** 2 < 300 * 300; // uzaqdakı meyit çəkilmir, yaxınlaşanda yenə görünür
     }
     const foes: Target[] = [player, ...allies, ...wolves.filter((w) => w.alive), ...(swatMounted ? [] : swat.filter((u) => u.alive))];
     for (const u of enemies) {
