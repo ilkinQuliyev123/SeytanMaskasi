@@ -19,7 +19,7 @@ export const GATE_HALF = 20;
 export const MEADOW = { x0: -1185, x1: -1015 }; // otlaq və samanlıq
 export const VILLAGE = { x: -1300, z: 0, r: 175 };
 /** sığınacaq: arxasında gizlənib döyüşmək olar (h — hündürlük) */
-export type Cover = { x: number; z: number; r: number; h: number; n: number };
+export type Cover = { cap?: number; x: number; z: number; r: number; h: number; n: number };
 export const VALLEY = 310; // |z| > VALLEY — dağ yamacı başlayır
 /** oyun meydanı: uzunluq — kənddən gəmilərə qədər, en — iki dağ arası */
 export const AREA = { x0: -1460, x1: 1500, z0: -340, z1: 340 };
@@ -133,7 +133,7 @@ function buildSea(scene: Scene) {
   }
   c.putImageData(img, 0, 0); t.update(); t.wrapU = t.wrapV = Texture.WRAP_ADDRESSMODE; t.uScale = t.vScale = 220;
   const m = new StandardMaterial("sea", scene);
-  m.diffuseColor = new Color3(0.05, 0.13, 0.19); m.specularColor = new Color3(1, 0.72, 0.45); m.specularPower = 70;
+  m.diffuseColor = new Color3(0.05, 0.13, 0.19); m.specularColor = new Color3(1, 0.97, 0.9); m.specularPower = 70;
   m.bumpTexture = t; m.bumpTexture.level = 0.5; m.emissiveColor = new Color3(0.02, 0.05, 0.08);
   const sea = MeshBuilder.CreateGround("seaPlane", { width: 12000, height: 12000 }, scene);
   sea.position.set(COAST + 5200, 0, 0); sea.material = m; sea.isPickable = false;

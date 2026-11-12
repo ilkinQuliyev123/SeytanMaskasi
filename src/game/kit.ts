@@ -166,7 +166,7 @@ function wolf(k: Kit) {
 }
 
 const MODELS: Record<string, (k: Kit) => unknown> = {
-  canavar: wolf,
+  canavar: wolf, swat: (k) => soldier(k, "#1c1c20", true),
   turk: (k) => soldier(k, "#6e6644", false), isgalci: (k) => soldier(k, "#5a6150", true),
   samurai, ninja, yeniceri: (k) => yeniceri(k, "#8c1c1c", "bork"), ottoman: (k) => yeniceri(k, "#2e5d3a"), mongol,
   okcu: (k) => yeniceri(k, "#3d5a2a", "bork").box(0.04, 1.2, 0.05, "#5a3a22", [-0.42, 1.2, 0.1]),

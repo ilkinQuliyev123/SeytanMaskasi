@@ -49,6 +49,7 @@ export const LOOKS: Record<string, Look> = {
   okcu: { outfit: "Male_Ranger", tint: "#5a6a34", head: hat.bork, hand: arm.bow },
   turk: { outfit: "Turk_Soldier", tint: "#7a7250", head: hat.kabalak, hand: arm.mauser, glbHead: "kabalak", glbHand: "mauser" },
   isgalci: { outfit: "Enemy_Soldier", tint: "#4a5868", head: hat.helmet, hand: arm.mauser, glbHead: "helmet", glbHand: "mauser" },
+  swat: { outfit: "Enemy_Soldier", tint: "!#2a2a2e", head: hat.helmet, hand: arm.mauser, glbHead: "helmet", glbHand: "mauser" }, // qara forma, qara maska
   mulki: { outfit: "Male_Peasant", tint: "#ffffff" },
   mulki2: { outfit: "Female_Peasant", tint: "#ffffff" },
   koylu: { outfit: "Male_Peasant", tint: "#c8d0e0", head: hat.kasa },
@@ -144,11 +145,11 @@ export class CharLib {
   }
 
   private tint(meshes: Mesh[], hex: string, tag: string) {
-    const c = Color3.FromHexString(hex), done = new Map<Material, Material>();
+    const force = hex[0] === "!", c = Color3.FromHexString(force ? hex.slice(1) : hex), done = new Map<Material, Material>();
     const fix = (m: Material | null): Material | null => {
       if (!m) return m;
       if (m instanceof MultiMaterial) { m.subMaterials = m.subMaterials.map((s) => fix(s)); return m; }
-      if (!done.has(m)) { const n = m.clone(m.name + tag + hex)!; if (n instanceof PBRMaterial && !/skin|male|female|eye|hair|keep/i.test(m.name)) n.albedoColor = c; n.backFaceCulling = false; done.set(m, n); }
+      if (!done.has(m)) { const n = m.clone(m.name + tag + hex)!; if (n instanceof PBRMaterial && (force ? !/eye/i.test(m.name) : !/skin|male|female|eye|hair|keep/i.test(m.name))) n.albedoColor = c; n.backFaceCulling = false; done.set(m, n); }
       return done.get(m)!;
     };
     for (const m of meshes) m.material = fix(m.material);

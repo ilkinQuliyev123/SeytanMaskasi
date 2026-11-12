@@ -18,6 +18,7 @@ export const WEAPONS: Record<string, Weapon> = {
   yumi: { id: "yumi", name: "Yay (yumi)", dmg: 40, rate: 0.7, mag: 20, reload: 0, spread: 0.03, range: 70, noise: 8 },
   shuriken: { id: "shuriken", name: "Şuriken", dmg: 22, rate: 2.5, mag: 12, reload: 0, spread: 0.04, range: 30, noise: 3 },
   wakizashi: { id: "wakizashi", name: "Qısa qılınc", dmg: 38, rate: 2.4, mag: 0, reload: 0, spread: 0, range: 2.2, noise: 3, melee: true },
+  m4: { id: "m4", name: "Avtomat", dmg: 30, rate: 3.2, mag: 30, reload: 2.2, spread: 0.0012, range: 170, noise: 65 },
   bite: { id: "bite", name: "Diş", dmg: 38, rate: 1.1, mag: 0, reload: 0, spread: 0, range: 2.3, noise: 4, melee: true },
   scimitar: { id: "scimitar", name: "Qılınc", dmg: 30, rate: 1.3, mag: 0, reload: 0, spread: 0, range: 2.4, noise: 5, melee: true },
   musket: { id: "musket", name: "Tüfəng", dmg: 35, rate: 0.5, mag: 1, reload: 3, spread: 0.05, range: 80, noise: 60 },
@@ -43,6 +44,7 @@ export const UNITS: Record<string, UnitType> = {
   mulki2: { id: "mulki2", name: "Kəndli qadın", hp: 50, speed: 2.0, color: "#6a4a6a", weapons: [], ally: false, civ: true },
   turk: { id: "turk", name: "Türk əsgəri", hp: 130, speed: 4.4, color: "#6b6440", weapons: ["mauser"], ally: true },
   isgalci: { id: "isgalci", name: "İşğalçı əsgər", hp: 120, speed: 4.1, color: "#3e4a5a", weapons: ["mauser"], ally: false },
+  swat: { id: "swat", name: "Xüsusi təyinatlı", hp: 190, speed: 4.8, color: "#1c1c20", weapons: ["m4"], ally: true },
   canavar: { id: "canavar", name: "Canavar", hp: 300, speed: 7.2, color: "#4a4744", weapons: ["bite"], ally: true, beast: true },
   mongol: { id: "mongol", name: "Monqol döyüşçüsü", hp: 110, speed: 4.6, color: "#7a5230", weapons: ["bow", "scimitar"], ally: false },
 };

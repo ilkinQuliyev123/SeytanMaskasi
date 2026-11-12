@@ -8,7 +8,7 @@ import { Color3, Color4, DefaultRenderingPipeline, DynamicTexture, Engine, GlowL
 import { UNITS, type ArmySetup, type GameMap } from "./data";
 import { heightAt, Grid } from "./logic";
 import { Player } from "./player";
-import { Unit, setChars, type Target } from "./units";
+import { Unit, setChars, type Target, type Cover } from "./units";
 import { Sky } from "./sky";
 import { CharLib, hat, CLIP, type AnimState } from "./chars";
 import { Sfx } from "./audio";
@@ -84,8 +84,34 @@ function shipModel(scene: Scene): Mesh {
   return m;
 }
 
-// --- desant qayığı: 10 əsgər (dəbilqələri görünür), avarlar ---
+// --- zirehli əsgər daşıyan maşın (içində 19 əsgər): gövdə, maili burun, 6 təkər, kiçik qüllə; +z irəli ---
+function apcModel(scene: Scene): Mesh {
+  const k = new Kit(scene), A = "#4d5a4a", D = "#39443a", T = "#1c1c1c";
+  k.box(2.7, 1.25, 6.2, A, [0, 1.35, 0]).box(2.7, 0.9, 1.5, A, [0, 1.25, 3.4], [0.55, 0, 0]).box(2.3, 0.55, 3.6, D, [0, 2.2, -0.6]) // gövdə, burun, üst
+    .cyl(0.5, 1.2, 1.3, D, [0, 2.7, 1.1], undefined, 8).cyl(1.6, 0.12, 0.12, T, [0, 2.75, 2.2], [Math.PI / 2, 0, 0], 6) // qüllə + lülə
+    .box(2.2, 0.5, 0.08, "#20262a", [0, 1.95, 3.05], [0.5, 0, 0]).box(1.2, 1.3, 0.1, D, [0, 1.3, -3.12]); // ön şüşə zolağı, arxa qapı
+  for (const s of [-1, 1]) for (let i = -1; i <= 1; i++) k.cyl(0.5, 1.15, 1.15, T, [s * 1.4, 0.58, i * 2.1], [0, 0, Math.PI / 2], 10);
+  const m = k.build("apc", vcMat(scene, "vcShip", 0.3)); m.isVisible = false;
+  return m;
+}
+function swatCarModel(scene: Scene): Mesh {
+  const k = new Kit(scene), A = "#17181b", D = "#0e0f11", T = "#060606";
+  k.box(2.6, 1.5, 6, A, [0, 1.5, -0.3]).box(2.6, 0.95, 1.6, A, [0, 1.25, 3.3]).box(2.3, 0.7, 3.8, D, [0, 2.55, -0.9]) // gövdə, kapot, dam
+    .box(2.3, 0.6, 0.08, "#2a3440", [0, 2.2, 2.52], [0.35, 0, 0]).box(2.7, 0.3, 0.3, D, [0, 0.9, 4.15]) // ön şüşə, tampon
+    .box(0.5, 0.14, 0.25, "#2c4cff", [-0.5, 2.98, 0.6]).box(0.5, 0.14, 0.25, "#ff2c2c", [0.5, 2.98, 0.6]); // işıqlar
+  for (const s of [-1, 1]) for (const z of [-2.2, 2.2]) k.cyl(0.55, 1.2, 1.2, T, [s * 1.35, 0.6, z], [0, 0, Math.PI / 2], 10);
+  const m = k.build("swatCar", vcMat(scene, "vcShip", 0.3)); m.isVisible = false;
+  return m;
+}
+type Car = { m: InstancedMesh; p: Vector3; yaw: number; cover: Cover };
+type Apc = { m: InstancedMesh; p: Vector3; n: number; hp: number; yaw: number; outT: number; dead: number };
+
+// --- desant gəmisi: yastı göyərtə, qabaqda enən rampa; üstündə zirehli maşın gəlir ---
 function boatModel(scene: Scene): Mesh {
+  if (scene) { const k = new Kit(scene), G = "#5a626a", D = "#3e464e";
+    k.box(4.6, 1.3, 12, G, [0, 0.1, 0]).box(4.8, 0.15, 12.2, D, [0, 0.8, 0]).box(0.25, 1.3, 12, D, [-2.3, 1.4, 0]).box(0.25, 1.3, 12, D, [2.3, 1.4, 0])
+      .box(4.4, 0.2, 2.6, D, [0, 1.5, 6.9], [-0.7, 0, 0]).box(3.2, 1.8, 2.2, G, [0, 1.7, -5]).box(2.8, 0.5, 0.1, "#20262a", [0, 2.2, -3.88]); // rampa, kapitan köşkü
+    const m = k.build("boat", vcMat(scene, "vcShip", 0.3)); m.isVisible = false; return m; }
   const k = new Kit(scene), W = "#4a3a2a";
   k.box(2.8, 1.1, 8, W, [0, 0.2, 0]).box(1.98, 1.1, 1.98, W, [0, 0.2, 4], [0, Math.PI / 4, 0]).box(2.9, 0.12, 8.2, "#6a5238", [0, 0.8, 0]);
   for (let i = 0; i < 10; i++) { const x = (i % 2 ? 0.6 : -0.6), z = -3 + Math.floor(i / 2) * 1.4; k.box(0.45, 0.6, 0.35, "#45525f", [x, 1.1, z]).sph(0.42, "#4a5148", [x, 1.55, z], [1, 0.55, 1], 6); }
@@ -93,11 +119,11 @@ function boatModel(scene: Scene): Mesh {
   const m = k.build("boat", vcMat(scene, "vcShip", 0.3)); m.isVisible = false;
   return m;
 }
-type Boat = { m: InstancedMesh; p: Vector3; to: Vector3; n: number; sunk: number };
-const boatHas = (b: Boat, p: Vector3) => { const dx = p.x - b.p.x, dz = p.z - b.p.z, a = -b.m.rotation.y, lx = dx * Math.cos(a) + dz * Math.sin(a), lz = -dx * Math.sin(a) + dz * Math.cos(a); return Math.abs(lx) < 2 && Math.abs(lz) < 5 && p.y < 3.5 && p.y > -1.5; };
+type Boat = { m: InstancedMesh; p: Vector3; to: Vector3; n: number; sunk: number; apc: InstancedMesh | null };
+const boatHas = (b: Boat, p: Vector3) => { const dx = p.x - b.p.x, dz = p.z - b.p.z, a = -b.m.rotation.y, lx = dx * Math.cos(a) + dz * Math.sin(a), lz = -dx * Math.sin(a) + dz * Math.cos(a); return Math.abs(lx) < 2.6 && Math.abs(lz) < 6.5 && p.y < 4 && p.y > -1.5; };
 
 class Ship {
-  hp = 100; crew = 50; sink = 0; cool = 20 + Math.random() * 25; bob = Math.random() * 6;
+  hp = 100; crew = 300; sink = 0; cool = 20 + Math.random() * 25; bob = Math.random() * 6;
   mesh: InstancedMesh; smoke: ParticleSystem;
   constructor(scene: Scene, base: Mesh, public pos: Vector3, public yaw: number, smokeTex: DynamicTexture, low: boolean) {
     this.mesh = base.createInstance("shipI"); this.mesh.position.copyFrom(pos); this.mesh.rotation.y = yaw; this.mesh.metadata = { solid: true };
@@ -187,20 +213,20 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
 
   // günəş: dənizdən yarımçıq çıxıb (aşağı yarısı dənizin arxasında qalır)
   const sunDisc = MeshBuilder.CreatePlane("sunDisc", { size: 430 }, scene), halo = MeshBuilder.CreatePlane("sunHalo", { size: 1900 }, scene);
-  for (const [m, a, b] of [[sunDisc, "rgba(255,246,214,1)", "rgba(255,170,60,1)"], [halo, "rgba(255,170,90,0.55)", "rgba(255,120,60,0)"]] as const) {
+  for (const [m, a, b] of [[sunDisc, "rgba(255,255,244,1)", "rgba(255,246,210,1)"], [halo, "rgba(255,250,230,0.45)", "rgba(255,250,230,0)"]] as const) {
     const t = new DynamicTexture(m.name + "T", 256, scene, false), c = t.getContext() as CanvasRenderingContext2D, g = c.createRadialGradient(128, 128, 0, 128, 128, 128);
-    if (m === sunDisc) { g.addColorStop(0, a); g.addColorStop(0.9, b); g.addColorStop(1, "rgba(255,150,50,0)"); } else { g.addColorStop(0, a); g.addColorStop(1, b); }
+    if (m === sunDisc) { g.addColorStop(0, a); g.addColorStop(0.9, b); g.addColorStop(1, "rgba(255,244,205,0)"); } else { g.addColorStop(0, a); g.addColorStop(1, b); }
     c.fillStyle = g; c.fillRect(0, 0, 256, 256); t.hasAlpha = true; t.update();
     const mm = new StandardMaterial(m.name + "M", scene); mm.emissiveTexture = t; mm.opacityTexture = t; mm.disableLighting = true; mm.fogEnabled = false;
     m.material = mm; m.isPickable = false; m.billboardMode = Mesh.BILLBOARDMODE_ALL;
   }
   halo.renderingGroupId = 0; sunDisc.renderingGroupId = 0;
-  const sunDir = new Vector3(1, 0, 0.3).normalize();
+  const sunDir = new Vector3(1, 0, 0.3).normalize(), SUN_UP = 0.62; // aydın gün: günəş hündürdə
   // sübh səması: vertex rəngli günbəz — üfüqdə isti narıncı, yuxarıda dərin mavi, günəş tərəfdə parlaq (1 çəkiliş, ~1000 üçbucaq)
   { const old = scene.meshes.find((m) => m.name === "dome" && m.infiniteDistance); if (old) old.isVisible = false; // ulduzlar sübhdə lazım deyil
     const d = MeshBuilder.CreateSphere("dawnSky", { diameter: 10000, segments: 24, sideOrientation: Mesh.BACKSIDE }, scene);
     const pos = d.getVerticesData(VertexBuffer.PositionKind)!, col: number[] = [];
-    const zen = new Color3(0.13, 0.24, 0.47), mid = new Color3(0.5, 0.52, 0.66), hor = new Color3(0.96, 0.6, 0.4), sunC = new Color3(1, 0.8, 0.5), below = new Color3(0.32, 0.33, 0.4), west = new Color3(0.62, 0.5, 0.6);
+    const zen = new Color3(0.2, 0.44, 0.86), mid = new Color3(0.46, 0.68, 0.95), hor = new Color3(0.8, 0.88, 0.97), sunC = new Color3(1, 0.98, 0.9), below = new Color3(0.55, 0.62, 0.7), west = new Color3(0.72, 0.82, 0.95);
     for (let i = 0; i < pos.length; i += 3) {
       const v = new Vector3(pos[i], pos[i + 1], pos[i + 2]).normalize(), e = v.y, s = Vector3.Dot(v, sunDir);
       const h = Color3.Lerp(west, hor, (s + 1) / 2); // günəşin əks tərəfi — çəhrayı-boz
@@ -212,14 +238,14 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     const m = new StandardMaterial("dawnSkyM", scene); m.disableLighting = true; m.diffuseColor = Color3.Black(); m.emissiveColor = Color3.White(); m.specularColor = Color3.Black(); m.fogEnabled = false; m.freeze(); // rəng = nöqtə rəngi
     d.material = m; d.infiniteDistance = true; d.isPickable = false; }
   const sunL = scene.getLightByName("sun") as DirectionalLight, ambL = scene.getLightByName("amb") as HemisphericLight;
-  const HAZE = new Color3(0.62, 0.52, 0.5);
+  const HAZE = new Color3(0.74, 0.82, 0.92);
 
   // görünüş
   // rəng: ACES kino tonu + rəng tonlaması (işıqlar isti, kölgələr soyuq). Zəif kartda bunlar materialların öz şeyderində işləyir —
   // əlavə tam ekran keçidi yoxdur (pulsuz). «Orta»da ayrıca boru: FXAA, bloom, kəskinlik.
-  const cc = new ColorCurves(); cc.globalSaturation = -8; cc.highlightsHue = 35; cc.highlightsDensity = 22; cc.highlightsSaturation = 10; cc.shadowsHue = 215; cc.shadowsDensity = 30; cc.shadowsSaturation = 15;
+  const cc = new ColorCurves(); cc.globalSaturation = 6; cc.highlightsHue = 40; cc.highlightsDensity = 8; cc.highlightsSaturation = 5; cc.shadowsHue = 215; cc.shadowsDensity = 12; cc.shadowsSaturation = 8;
   const ip = scene.imageProcessingConfiguration;
-  ip.toneMappingEnabled = true; ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES; ip.contrast = 1.12; ip.exposure = 1.3;
+  ip.toneMappingEnabled = true; ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES; ip.contrast = 1.08; ip.exposure = 1.45;
   ip.colorCurvesEnabled = true; ip.colorCurves = cc; ip.vignetteEnabled = !low; ip.vignetteWeight = 2;
   if (!low) {
     const pipe = new DefaultRenderingPipeline("fx", true, scene, [player.camera]);
@@ -256,7 +282,21 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     const a = (i / 21) * Math.PI * 2, rr = 5 + (i % 3) * 1.6, x = player.pos.x + Math.cos(a) * rr, z = player.pos.z + Math.sin(a) * rr;
     const u = new Unit(scene, UNITS.canavar, "bite", new Vector3(x, 0, z), new Vector3(x, 0, z)); u.mesh.isPickable = false; return u;
   });
-  let wolfAttack = false, wolfT = 0;
+  let wolfAttack = false, wolfT = 0, esqT = 0;
+  // xüsusi təyinatlı dəstə: 120 nəfər, qara forma, 9 qara zirehli maşın — bazanın arxasında gözləyir. M — maşınlara minib oyunçunun dalınca sürür; yenə M — düşüb maşınların arxasında gizlənərək döyüşür
+  const carBase = swatCarModel(scene), SWAT_N = 120;
+  const cars: Car[] = Array.from({ length: 9 }, (_, i) => {
+    const p = new Vector3(OUR_BARRACKS.x - 26 - Math.floor(i / 3) * 10, 0, OUR_BARRACKS.z + ((i % 3) - 1) * 9), m = carBase.createInstance("swatCarI");
+    m.isPickable = false; return { m, p, yaw: Math.PI / 2, cover: { x: p.x, z: p.z, r: 3.4, h: 3.1, n: 0, cap: 14 } };
+  });
+  const swat: Unit[] = Array.from({ length: SWAT_N }, (_, i) => {
+    const c = cars[i % 9], j = Math.floor(i / 9), x = c.p.x - 5 - (j % 4) * 1.4, z = c.p.z + (Math.floor(j / 4) - 1.5) * 1.4;
+    return new Unit(scene, UNITS.swat, "m4", new Vector3(x, 0, z), new Vector3(x, 0, z));
+  });
+  let swatMounted = false, swatT = 0;
+  const allCovers = { near: (x: number, z: number) => [...coverGrid.near(x, z), ...(swatMounted ? [] : cars.filter((c) => (c.p.x - x) ** 2 + (c.p.z - z) ** 2 < 70 * 70).map((c) => c.cover))] } as unknown as Grid;
+  const seaActive = () => enemies.reduce((n, e) => n + (e.alive && e.fort === "sea" ? 1 : 0), 0) + boats.reduce((a, b) => a + b.n, 0) + apcs.reduce((a, b) => a + b.n, 0);
+  let sweepT = 0;
   const enemies: Unit[] = [];
   const trenchOf = (bi: number) => TRENCH_X.map((x, i) => ({ x, i })).filter(({ x }) => ENEMY_BARRACKS.reduce((b, q, j) => (Math.abs(q.x - x) < Math.abs(ENEMY_BARRACKS[b].x - x) ? j : b), 0) === bi).map((t) => t.i);
   ENEMY_BARRACKS.forEach((b, bi) => {
@@ -289,7 +329,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   // donanma: 9 gəmi sahildən 250–500 m aralıda, sahilə paralel
   const shipBase = shipModel(scene), smokeTex = puff(scene, "shipSmokeT", "rgba(255,255,255,1)", "rgba(255,255,255,0)");
   const ships = Array.from({ length: 9 }, (_, i) => new Ship(scene, shipBase, new Vector3(COAST + 230 + Math.floor(i / 3) * 125 + Math.random() * 20, 0, -200 + (i % 3) * 200 + (Math.random() - 0.5) * 30), (i % 2 ? Math.PI : 0) + (Math.random() - 0.5) * 0.2, smokeTex, low));
-  const boatBase = boatModel(scene), boats: Boat[] = [];
+  const boatBase = boatModel(scene), boats: Boat[] = [], apcBase = apcModel(scene), apcs: Apc[] = [];
   let landing = false;
   // təpə topları
   const guns = HILLS.map((h) => { const y = heightAt(h.x, h.z); return new HillGun(scene, new Vector3(h.x, y - 0.2, h.z), !!h.big); });
@@ -309,9 +349,10 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   };
   /** T saniyədə b nöqtəsinə düşən başlanğıc sürəti */
   const lob = (a: Vector3, b: Vector3, T: number) => new Vector3((b.x - a.x) / T, (b.y - a.y + 0.5 * G * T * T) / T, (b.z - a.z) / T);
-  const sinkBoat = (b: Boat) => { b.sunk = 0.01; if (b.n) say(`Qayıq batdı! (${b.n} düşmən)`, 2); b.n = 0; };
+  const sinkBoat = (b: Boat) => { b.sunk = 0.01; if (b.n) say(`Desant gəmisi batdı! (zirehli maşın və ${b.n} düşmən)`, 2.5); b.n = 0; };
   const explode = (s: Shell, at: Vector3, water: boolean) => {
     if (water) { fx.water(at, s.big ? 1.6 : 1); for (const b of boats) if (!b.sunk && b.n && Vector3.Distance(b.p, at) < s.r + 3) sinkBoat(b); } else fx.boom(at, s.big ? 1.6 : 1);
+    if (!s.enemy) for (const a of apcs) if (!a.dead && Vector3.Distance(a.p, at) < s.r + 3) { a.hp -= s.big ? 700 : 350; if (a.hp <= 0) { a.dead = 0.01; fx.boom(a.p, 1.6); say(`Zirehli maşın məhv edildi! (içində ${a.n} düşmən)`, 2.5); a.n = 0; } }
     sfx.cannon(Vector3.Distance(at, player.pos) * 0.8);
     const foes: Target[] = s.enemy ? [player, ...allies] : enemies;
     for (const t of foes) { const d = Vector3.Distance(t.pos, at); if (t.alive && d < s.r) t.hit(s.dmg * (1 - d / (s.r + 1)), at); }
@@ -389,6 +430,12 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   const onKey = (e: KeyboardEvent) => {
     if (paused || ended || e.repeat) return;
     if (e.code === "KeyF") { order = order === "follow" ? "attack" : "follow"; for (const a of allies) if (!a.hold) a.alert = null; say(order === "attack" ? "Dəstə: HÜCUM! Süngü taxın!" : "Dəstə: məni izlə", 2.5); }
+    if (e.code === "KeyM") {
+      swatMounted = !swatMounted;
+      if (swatMounted) { for (const u of swat) { u.target = null; u.alert = null; u.setLod(false, false); if (u.far) u.far.isVisible = false; u.mesh.isVisible = false; } }
+      else swat.forEach((u, i) => { if (!u.alive) return; const c = cars[i % 9], a = Math.random() * 6.28; u.pos.set(c.p.x + Math.cos(a) * 4.5, 0, c.p.z + Math.sin(a) * 4.5); });
+      say(swatMounted ? "Xüsusi təyinatlılar maşınlara mindi — dalınca gəlirlər" : "Xüsusi təyinatlılar düşdü — maşınların arxasında mövqe tutur", 3);
+    }
     if (e.code === "KeyB") { wolfAttack = !wolfAttack; for (const w of wolves) { w.alert = null; w.target = null; } say(wolfAttack ? "Canavarlar: HÜCUM! Düşməni parçalayın!" : "Canavarlar geri qayıdır", 2.5); }
     if (e.code === "KeyG") {
       const g = guns.filter((x) => crewOf(x).length < 3).sort((a, b) => Vector3.Distance(a.pos, player.pos) - Vector3.Distance(b.pos, player.pos))[0];
@@ -453,14 +500,14 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     const pp = player.pos;
     hitMark.style.opacity = player.hitFlash > 0 ? "1" : "0"; player.hitFlash -= dt;
     // günəş: kameradan 5200 m, sahil istiqamətində; yavaş qalxır
-    const rise = 20 + (sky.hour - 6.05) * 900;
+    const rise = 4500 * SUN_UP / 0.87;
     sunDisc.position.copyFrom(player.camera.position.add(sunDir.scale(4500))); sunDisc.position.y = rise * 0.87;
     halo.position.copyFrom(player.camera.position.add(sunDir.scale(4600))); halo.position.y = rise * 0.87 + 35;
     // sübh işığı: isti alçaq günəş, soyuq mavi ətraf işıq, üfüq rəngində duman (Sky-ın ümumi dəyərlərinin üstündən)
     if (shadow) sunL.position.copyFrom(player.pos.subtract(sunL.direction.scale(200))); // kölgə sahəsi oyunçunu izləyir
-    sunL.diffuse.set(1, 0.74, 0.52); sunL.intensity = 2.1; sunL.direction.set(-sunDir.x, -0.16, -sunDir.z);
-    ambL.diffuse.set(0.55, 0.62, 0.82); ambL.groundColor.set(0.32, 0.26, 0.2); ambL.intensity = 0.95;
-    scene.fogColor.copyFrom(HAZE); scene.fogDensity = 0.001;
+    sunL.diffuse.set(1, 0.97, 0.9); sunL.intensity = 2.7; sunL.direction.set(-sunDir.x, -0.8, -sunDir.z);
+    ambL.diffuse.set(0.8, 0.86, 0.98); ambL.groundColor.set(0.5, 0.46, 0.4); ambL.intensity = 1.25;
+    scene.fogColor.copyFrom(HAZE); scene.fogDensity = 0.0006;
     sea.tex.uOffset += dt * 0.004; sea.tex.vOffset += dt * 0.0025;
     // səslər
     if ((ambT -= dt) <= 0) { ambT = 1; sfx.ambience(false, 0.5); }
@@ -482,7 +529,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
       lib?.tick(); lib?.tickDying(performance.now() / 1000);
       anchors.sort((a, b) => Vector3.DistanceSquared(a, pp) - Vector3.DistanceSquared(b, pp)); if (anchors[0]) lamp.position.copyFrom(anchors[0]);
       if (!battle && (pp.x > TRENCH_X[0] - 150 || enemies.some((e) => e.alive && e.target))) { battle = true; say("Döyüş başladı! Toplara heyət göndər (G) — gəmiləri vursunlar.", 4); }
-      if (!landing && pp.x > TRENCH_X[8] - 60) { landing = true; ships.forEach((s) => (s.cool = Math.random() * 10)); say("Gəmilərdən qayıqlar endirilir! Sahilə çıxanları vur, toplarla qayıqları batır!", 5); }
+      if (!landing && battle) { landing = true; ships.forEach((s) => (s.cool = Math.random() * 10)); say("Gəmilərdən qayıqlar endirilir! Sahilə çıxanları vur, toplarla qayıqları batır!", 5); }
     }
     if ((sqT -= dt) <= 0) { sqT = 0.5; assignSquads(); }
     allies.forEach((u, i) => u.update(dt, { foes: enemies, night: false, fog: 0, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked, via: viaGate, covers: coverGrid }));
@@ -494,14 +541,42 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
       const wf: Unit[] = wolfAttack ? enemies : enemies.filter((e) => e.alive && (e.pos.x - w.pos.x) ** 2 + (e.pos.z - w.pos.z) ** 2 < 49);
       w.update(dt, { foes: wf, night: false, fog: 0, leader: pp, order: wolfAttack ? "attack" : "follow", grid, mates: wolves, onShot: shot, slot: i });
     });
-    const foes: Target[] = [player, ...allies, ...wolves.filter((w) => w.alive)];
+    // SWAT maşınları: minik halında oyunçunun dalınca kolonla sürür (18 m-də dayanır)
+    cars.forEach((c, i) => {
+      if (swatMounted) {
+        const ring = 16 + Math.floor(i / 3) * 9, ang = player.yaw + Math.PI + ((i % 3) - 1) * 0.5, tx = pp.x + Math.sin(ang) * ring, tz = pp.z + Math.cos(ang) * ring;
+        let vx = tx - c.p.x, vz = tz - c.p.z; const L = Math.hypot(vx, vz);
+        if (L > 3) {
+          vx /= L; vz /= L;
+          for (const o of grid.near(c.p.x, c.p.z)) { const ox = c.p.x - o.x, oz = c.p.z - o.z, od = Math.hypot(ox, oz); if (od < o.r + 5 && od > 1e-3) { vx += (ox / od) * 1.5; vz += (oz / od) * 1.5; } }
+          const g2 = viaGate(c.p, new Vector3(tx, 0, tz)); if (g2.x !== tx || g2.z !== tz) { const gl = Math.hypot(g2.x - c.p.x, g2.z - c.p.z) || 1; vx = (g2.x - c.p.x) / gl; vz = (g2.z - c.p.z) / gl; }
+          const vl = Math.hypot(vx, vz) || 1, sp = Math.min(L > 60 ? 16 : 11, L * 2); c.p.x += (vx / vl) * sp * dt; c.p.z += (vz / vl) * sp * dt; c.yaw = Math.atan2(vx, vz);
+        }
+      }
+      c.p.y = heightAt(c.p.x, c.p.z); c.m.position.copyFrom(c.p); c.m.rotation.y = c.yaw; c.cover.x = c.p.x; c.cover.z = c.p.z;
+    });
+    if (!swatMounted) {
+      if ((swatT -= dt) <= 0) { swatT = 0.5; for (const c of cars) c.cover.n = 0; for (const u of swat) { const cv = (u as unknown as { cover: Cover | null }).cover; if (u.alive && cv && cv.cap) cv.n++; } }
+      swat.forEach((u, i) => {
+        if (!u.alive) return;
+        u.dist = Math.hypot(u.pos.x - pp.x, u.pos.z - pp.z); u.setLod(u.dist < NEAR_R && i % 6 === 0, u.dist < 450);
+        const c = cars[i % 9];
+        u.update(dt, { foes: enemies, night: false, fog: 0, leader: c.p, order, grid, mates: swat, onShot: shot, slot: Math.floor(i / 9), blocked, covers: allCovers });
+      });
+    }
+    // ölən düşmənlər 25 s sonra səhnədən silinir (3000 nəfər yığılıb oyunu ağırlaşdırmasın)
+    if ((sweepT -= dt) <= 0) {
+      sweepT = 2;
+      for (let i = enemies.length - 1; i >= 0; i--) { const e = enemies[i] as Unit & { deadT?: number }; if (e.alive) continue; e.deadT = (e.deadT ?? 0) + 2; if (e.deadT > 25) { e.mesh.dispose(); e.far?.dispose(); enemies.splice(i, 1); } }
+    }
+    const foes: Target[] = [player, ...allies, ...wolves.filter((w) => w.alive), ...(swatMounted ? [] : swat.filter((u) => u.alive))];
     for (const u of enemies) {
       if (!u.alive) continue;
       const busy = u.target || u.alert;
       if (u.dist > 300 && !busy) continue;
       u.acc += dt;
       if (u.dist > 120 && !busy && (frame + (u.hp | 0)) % 4) continue;
-      u.update(u.acc, { foes, night: false, fog: 0, leader: pp, order, grid, mates: enemies, onShot: shot, slot: 0, blocked, covers: coverGrid });
+      u.update(u.acc, { foes, night: false, fog: 0, leader: pp, order, grid, mates: enemies, onShot: shot, slot: 0, blocked, covers: coverGrid, aware: true });
       u.acc = 0;
       if (u.target && u.fort.startsWith("t")) { // səngərdə vuruşma başladı — yaxın kazarma köməyə gəlir
         const bi = ENEMY_BARRACKS.reduce((b, q, j) => (Math.abs(q.x - u.pos.x) < Math.abs(ENEMY_BARRACKS[b].x - u.pos.x) ? j : b), 0);
@@ -529,31 +604,65 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     for (const s of ships) {
       s.update(dt);
       if (!s.alive || !landing || s.crew <= 0 || (s.cool -= dt) > 0) continue;
-      if (boats.filter((b) => !b.sunk && b.n > 0).length >= 7) { s.cool = 3; continue; }
-      const n = Math.min(10, s.crew); s.crew -= n; s.cool = 22 + Math.random() * 10;
+      if (boats.filter((b) => !b.sunk && b.n > 0).length >= 4 || seaActive() >= 114) { s.cool = 4; continue; } // hissə-hissə: meydanda eyni vaxtda ən çox ~6 maşınlıq desant
+      const n = Math.min(19, s.crew); s.crew -= n; s.cool = 26 + Math.random() * 12; // hər desant gəmisində 1 zirehli maşın, içində 19 əsgər
       const from = new Vector3(s.pos.x - 9, 0, s.pos.z + (Math.random() - 0.5) * 40);
       const to = new Vector3(COAST - 6, 0, Math.max(-TRENCH_Z, Math.min(TRENCH_Z, s.pos.z + (Math.random() - 0.5) * 140)));
       const m = boatBase.createInstance("boatI"); m.position.copyFrom(from); m.rotation.y = Math.atan2(to.x - from.x, to.z - from.z); m.isPickable = false;
-      boats.push({ m, p: from, to, n, sunk: 0 });
+      const am = apcBase.createInstance("apcI"); am.isPickable = false; am.rotation.y = m.rotation.y;
+      boats.push({ m, p: from, to, n, sunk: 0, apc: am });
     }
     for (let i = boats.length - 1; i >= 0; i--) {
       const b = boats[i];
-      if (b.sunk > 0) { b.sunk += dt; b.m.position.y = -b.sunk * 0.7; b.m.rotation.z = b.sunk * 0.25; if (b.sunk > 5) { b.m.dispose(); boats.splice(i, 1); } continue; }
+      if (b.sunk > 0) { b.sunk += dt; b.m.position.y = -b.sunk * 0.7; b.m.rotation.z = b.sunk * 0.25; if (b.apc) { b.apc.position.set(b.p.x, 0.9 - b.sunk * 0.9, b.p.z); b.apc.rotation.z = b.sunk * 0.25; } if (b.sunk > 5) { b.m.dispose(); b.apc?.dispose(); boats.splice(i, 1); } continue; }
       if (b.n === 0) continue; // sahildə boş qayıq
       const d = b.to.subtract(b.p), L = d.length();
       if (L < 2) { // sahilə çıxdılar: hücuma keçirlər
-        for (let j = 0; j < b.n; j++) {
-          const x = b.to.x - 4 - Math.random() * 3, z = b.to.z + (j - b.n / 2) * 1.5;
-          const u = new Unit(scene, UNITS.isgalci, "mauser", new Vector3(x, 0, z), new Vector3(x - 40, 0, z)); u.fort = "sea"; u.alert = new Vector3(pp.x, 0, pp.z); enemies.push(u);
-        }
-        say(`${b.n} düşmən sahilə çıxdı!`, 2); b.n = 0; b.m.position.y = 0.2; continue;
+        if (b.apc) apcs.push({ m: b.apc, p: new Vector3(b.to.x, 0, b.to.z), n: b.n, hp: 700, yaw: -Math.PI / 2, outT: 0, dead: 0 });
+        say("Zirehli maşın sahilə çıxdı! Topla vur — içində " + b.n + " düşmən var", 3); b.apc = null; b.n = 0; b.m.position.y = 0.2; continue;
       }
       b.p.addInPlace(d.scale(Math.min(L, 5.5 * dt) / L)); b.m.position.set(b.p.x, Math.sin(gameTime * 2 + i) * 0.15, b.p.z);
+      if (b.apc) b.apc.position.set(b.p.x, 0.9 + Math.sin(gameTime * 2 + i) * 0.15, b.p.z);
+    }
+    // zirehli maşınlar: sahildən oyunçuya tərəf sürür; 55 m qalanda (və ya bizim əsgərə 45 m) dayanıb 19 əsgəri endirir
+    for (let i = apcs.length - 1; i >= 0; i--) {
+      const a = apcs[i];
+      if (a.dead > 0) { a.dead += dt; a.m.rotation.z = Math.min(0.25, a.dead * 0.2); if ((a.outT -= dt) <= 0) { a.outT = 0.5; fx.boom(a.p.add(new Vector3(0, 1.5, 0)), 0.25); } if (a.dead > 25) { a.m.dispose(); apcs.splice(i, 1); } continue; }
+      const dx = pp.x - a.p.x, dz = pp.z - a.p.z, L = Math.hypot(dx, dz);
+      const stop = L < 55 || a.n < 19 || allies.some((u) => u.alive && (u.pos.x - a.p.x) ** 2 + (u.pos.z - a.p.z) ** 2 < 45 * 45);
+      if (!stop) {
+        let vx = dx / L, vz = dz / L;
+        for (const o of grid.near(a.p.x, a.p.z)) { const ox = a.p.x - o.x, oz = a.p.z - o.z, od = Math.hypot(ox, oz); if (od < o.r + 6 && od > 1e-3) { vx += (ox / od) * 1.6; vz += (oz / od) * 1.6; } } // maneələrdən yan keçir
+        const vl = Math.hypot(vx, vz) || 1; a.p.x += (vx / vl) * 9 * dt; a.p.z += (vz / vl) * 9 * dt; a.yaw = Math.atan2(vx, vz);
+        if ((a.outT -= dt) <= 0) { a.outT = 0.25; fx.dust?.(a.p); }
+      } else if (a.n > 0 && (a.outT -= dt) <= 0) { // arxa qapıdan iki-iki enirlər
+        a.outT = 0.35;
+        for (let j = 0; j < 2 && a.n > 0; j++, a.n--) {
+          const bx = a.p.x - Math.sin(a.yaw) * 4.5 + (Math.random() - 0.5) * 3, bz = a.p.z - Math.cos(a.yaw) * 4.5 + (Math.random() - 0.5) * 3;
+          const u = new Unit(scene, UNITS.isgalci, "mauser", new Vector3(bx, 0, bz), new Vector3(bx, 0, bz)); u.fort = "sea"; u.alert = new Vector3(pp.x, 0, pp.z); enemies.push(u);
+        }
+        if (a.n === 0) say("19 düşmən zirehli maşından endi!", 2);
+      }
+      a.p.y = heightAt(a.p.x, a.p.z); a.m.position.copyFrom(a.p); a.m.rotation.y = a.yaw;
+    }
+    // düşmən desantı da bizim kimi: 10-luq qruplar, 20 m aralı zolaqlarda, 40 m-lik sıçrayışlarla irəliləyir
+    if ((esqT -= dt) <= 0) {
+      esqT = 0.5;
+      const live = enemies.filter((e) => e.alive && e.fort === "sea"), KN = Math.ceil(live.length / 10), tg: Target[] = [player, ...allies.filter((u) => u.alive)];
+      for (let k = 0; k < KN; k++) {
+        const g = live.slice(k * 10, k * 10 + 10), cx = g.reduce((s, u) => s + u.pos.x, 0) / g.length;
+        const laneZ = Math.max(-VALLEY + 30, Math.min(VALLEY - 30, pp.z + (k - (KN - 1) / 2) * 20));
+        let best: Target | null = null, bd = 1e12;
+        for (const t of tg) { const d = (t.pos.x - cx) ** 2 + ((t.pos.z - laneZ) * 2) ** 2; if (d < bd) { bd = d; best = t; } }
+        if (!best) continue;
+        const gx = Math.max(best.pos.x + 6, cx - 40);
+        g.forEach((u, j) => { (u.squadGoal ??= new Vector3()).set(gx - (j % 2) * 1.5, 0, laneZ + (j - 4.5) * 2.2); });
+      }
     }
     updateShells(dt);
     for (const t of tracers) if ((t.t -= dt) <= 0) t.l.isVisible = false;
     msgT -= dt;
-    const landLeft = enemies.filter((e) => e.alive).length, crewLeft = ships.reduce((a, s) => a + s.crew, 0) + boats.reduce((a, b) => a + b.n, 0), sunk = ships.filter((s) => !s.alive).length;
+    const landLeft = enemies.filter((e) => e.alive).length, crewLeft = ships.reduce((a, s) => a + s.crew, 0) + boats.reduce((a, b) => a + b.n, 0) + apcs.reduce((a, b) => a + b.n, 0), sunk = ships.filter((s) => !s.alive).length;
     if ((!landLeft && !crewLeft) || !player.alive) return finish(player.alive);
     if (!TEST && (resT -= dt) <= 0) { // FPS-ə görə ekran ölçüsü: zəif anda kiçilir, güc çatanda böyüyür
       resT = 1; const f = engine.getFps(); let sc = engine.getHardwareScalingLevel();
@@ -564,7 +673,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
       hudT = 0.1;
       const g = player.gun, mg = manning;
       hudRef.update({ hp: player.hp, maxHp: player.maxHp, weapon: mg ? (mg.big ? "Böyük sahil topu" : "Sahə topu") : g.w.name, ammo: mg ? (mg.cool > 0 ? 0 : 1) : g.ammo, mag: mg ? 1 : g.w.mag, reloading: mg ? mg.cool > 0 : g.reloading > 0,
-        hour: sky.hour, weather: "sübh", enemiesLeft: landLeft + crewLeft, enemiesTotal: landTotal + 450, allies: allies.filter((a) => a.alive).length,
+        hour: sky.hour, weather: "aydın", enemiesLeft: landLeft + crewLeft, enemiesTotal: landTotal + 2700, allies: allies.filter((a) => a.alive).length,
         form: null, cooldowns: [], fps: engine.getFps(), msg: msgT > 0 ? msg : "", forts: { cleared: sunk, total: ships.length }, scope: mg ? 0 : player.scope });
     }
   });
@@ -579,6 +688,6 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   }
   if (location.search.includes("test")) setInterval(() => scene.render(), 60);
   else engine.runRenderLoop(() => scene.render());
-  (window as unknown as { __game: unknown }).__game = { player, allies, enemies, wolves, ships, guns, state: () => ({ paused, ended, time: gameTime, manning: !!manning, battle }) };
+  (window as unknown as { __game: unknown }).__game = { player, allies, enemies, wolves, swat, cars, apcs, ships, guns, state: () => ({ paused, ended, time: gameTime, manning: !!manning, battle }) };
   lockSafe();
 }

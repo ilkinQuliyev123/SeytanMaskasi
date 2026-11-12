@@ -12,7 +12,7 @@ export const setChars = (c: CharLib | null) => (chars = c);
 export interface Target { pos: Vector3; alive: boolean; hit(dmg: number, from?: Vector3, kind?: string): void; ally: boolean; stealth?: number;
   /** vurulma ehtimalının əmsalı (əyilib/uzanıb/yuvarlanır — az) */ evade?: number; /** ona atəş açıldı (yayınma, sığınacaq) */ shotAt?(from: Vector3): void }
 /** sığınacaq: qaya, ot tayası... (n — arxasındakı əsgər sayı) */
-export type Cover = { x: number; z: number; r: number; h: number; n: number }; // stealth: görünmə əmsalı (1 — adi)
+export type Cover = { cap?: number; x: number; z: number; r: number; h: number; n: number }; // stealth: görünmə əmsalı (1 — adi)
 export type Post = { y: number; face: number };
 export type Ctx = {
   foes: Target[]; night: boolean; fog: number; leader: Vector3; order: "follow" | "attack"; grid: Grid; mates: Unit[];
@@ -21,6 +21,7 @@ export type Ctx = {
   via?: (from: Vector3, goal: Vector3) => Vector3;
   /** sığınacaqlar (qayalar və s.) — Grid-də */
   covers?: Grid;
+  /** düşmən də bizim əsgərlər kimi: hər tərəfi görür, süngü həmləsi, 10-luq qrup */ aware?: boolean;
 };
 
 const bases = new Map<string, Mesh>();
@@ -89,7 +90,7 @@ export class Unit implements Target {
     if (!ctx.covers || this.coverCd > 0) return false;
     let best: Cover | null = null, bd = 1e9;
     for (const o of ctx.covers.near(near.x, near.z) as Cover[]) {
-      if (o.n >= (o.r > 1.8 ? 3 : 2)) continue;
+      if (o.n >= (o.cap ?? (o.r > 1.8 ? 3 : 2))) continue;
       const dn = (o.x - near.x) ** 2 + (o.z - near.z) ** 2, d = (o.x - this.pos.x) ** 2 + (o.z - this.pos.z) ** 2, de = (o.x - from.x) ** 2 + (o.z - from.z) ** 2;
       if (dn < maxD * maxD && d < 45 * 45 && de > 64 && d < bd) { bd = d; best = o; }
     }
@@ -203,7 +204,7 @@ export class Unit implements Target {
         if (!f.alive) continue;
         const dx = f.pos.x - this.pos.x, dz = f.pos.z - this.pos.z, d = dx * dx + dz * dz;
         const sv = k * (f.stealth ?? 1); // görünməz/balaca hədəfi görmək çətindir
-        if (d < bd && ((this.target === f && sv > 0.3 * k) || canSee(dx / sv, dz / sv, this.facing, ctx.night, false, ctx.fog) || (this.ally && d < (this.ally && !f.stealth ? (this.gun.w.range * 0.8) ** 2 : 900)))) { bd = d; best = f; } // döyüşdə əsgər hər tərəfə baxır: tüfəng məsafəsindəki düşməni görür
+        if (d < bd && ((this.target === f && sv > 0.3 * k) || canSee(dx / sv, dz / sv, this.facing, ctx.night, false, ctx.fog) || ((this.ally || ctx.aware) && d < (!f.stealth ? (this.gun.w.range * 0.8) ** 2 : 900)))) { bd = d; best = f; } // döyüşdə əsgər hər tərəfə baxır: tüfəng məsafəsindəki düşməni görür
       }
       this.target = best;
       if (!best && (this.cover || this.stance !== "stand")) { this.freeCover(); this.stance = "stand"; this.peek = true; } // döyüş bitdi — ayağa qalx
@@ -220,7 +221,7 @@ export class Unit implements Target {
     if (this.target) {
       const d = Math.hypot(this.pos.x - this.target.pos.x, this.pos.z - this.target.pos.z);
       const bay = !!w.bayonet && d < 3; // süngü: yaxında tüfənglə deyil, süngü ilə
-      const charge = !!w.bayonet && this.ally && ctx.order === "attack" && d < 40; // hücum əmrində 40 m-dən süngü həmləsi
+      const charge = !!w.bayonet && !this.post && (this.ally ? ctx.order === "attack" : !!ctx.aware) && d < 40; // hücum əmrində 40 m-dən süngü həmləsi
       const want = w.melee || charge ? 2 : Math.min(w.range * 0.6, 25);
       const blocked = this.blk;
       // səngərdəki keşikçi: əyilib gizlənir, qalxıb atır (2–3.5 s gizli, 1.5–2.5 s atəş)
@@ -231,7 +232,7 @@ export class Unit implements Target {
       }
       // «izlə» əmrində: dəstədən ayrılıb düşmənin dalınca qaçmır — sənin yanında qalıb atır (özünü və səni qoruyur); topçu topun yanında qalır
       const stay = this.ally && !charge && !w.melee && (this.hold || ctx.order === "follow");
-      const squad = this.ally && !charge && !w.melee && !this.hold && ctx.order === "attack" ? this.squadGoal : null;
+      const squad = !charge && !w.melee && !this.hold && !this.post && (this.ally ? ctx.order === "attack" : !!ctx.aware) ? this.squadGoal : null;
       if (stay) { goal = this.hold ?? this.slotPos(ctx); if (Vector3.Distance(goal, this.pos) < 2) goal = null; else speed = this.type.speed * (Vector3.Distance(goal, this.pos) > 15 ? 1.6 : 1); }
       else if (squad) { goal = Vector3.Distance(squad, this.pos) > 2 ? squad : null; speed = this.type.speed * 1.15; } // 10-luq qrup öz zolağında irəliləyir
       else if (d > want || blocked) {
@@ -284,9 +285,10 @@ export class Unit implements Target {
       goal = this.hold ? this.hold : ctx.order === "follow" ? this.slotPos(ctx) : this.squadGoal ?? this.alert;
       const far = goal ? Vector3.Distance(goal, this.pos) : 0;
       speed = this.type.speed * (far > 40 ? 2 : far > 10 ? 1.3 : 0.7); // geri qalanda tələsir
-    } else if (this.alert) {
-      goal = this.alert; speed = this.type.speed * 1.2;
-      if (Math.hypot(this.pos.x - this.alert.x, this.pos.z - this.alert.z) < 3) this.alert = null;
+    } else if (this.squadGoal || this.alert) { // düşmən qrupu öz zolağında irəliləyir (və ya həyəcan nöqtəsinə gedir)
+      goal = this.squadGoal ?? this.alert; speed = this.type.speed * 1.2;
+      if (this.alert && Math.hypot(this.pos.x - this.alert.x, this.pos.z - this.alert.z) < 3) this.alert = null;
+      if (goal && goal === this.squadGoal && Math.hypot(this.pos.x - goal.x, this.pos.z - goal.z) < 2) goal = null;
     } else if (this.route) { // küçə patrulu
       if (Math.hypot(this.pos.x - this.wp.x, this.pos.z - this.wp.z) < 2) {
         if (Math.random() < 0.08) this.dir = -this.dir;
