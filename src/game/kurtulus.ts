@@ -579,6 +579,6 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   }
   if (location.search.includes("test")) setInterval(() => scene.render(), 60);
   else engine.runRenderLoop(() => scene.render());
-  (window as unknown as { __game: unknown }).__game = { player, allies, enemies, ships, guns, state: () => ({ paused, ended, time: gameTime, manning: !!manning, battle }) };
+  (window as unknown as { __game: unknown }).__game = { player, allies, enemies, wolves, ships, guns, state: () => ({ paused, ended, time: gameTime, manning: !!manning, battle }) };
   lockSafe();
 }
