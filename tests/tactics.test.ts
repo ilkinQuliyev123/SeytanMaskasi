@@ -91,6 +91,24 @@ describe("döyüş taktikası", () => {
     expect(aliveE).toBeLessThan(10);
     expect(wolves.every((w) => w.stance === "stand")).toBe(true);
   });
+  it("SWAT: maşından düşəndə maşının arxasında gizlənib döyüşür", () => {
+    const car = new Vector3(0, 0, 0), grid = new Grid(), cover = { x: 0, z: 0, r: 3.4, h: 3.1, n: 0, cap: 14 };
+    const covers = { near: () => [cover] } as unknown as Grid;
+    const swat = Array.from({ length: 14 }, (_, i) => new Unit(scene, UNITS.swat, "m4", new Vector3(Math.cos(i) * 4.5, 0, Math.sin(i) * 4.5), new Vector3(0, 0, 0)));
+    const enemies = Array.from({ length: 19 }, (_, i) => new Unit(scene, UNITS.isgalci, "mauser", new Vector3(100 + (i % 4) * 3, 0, (i % 5) * 4 - 8), new Vector3(100, 0, 0)));
+    for (const e of enemies) { e.facing = -Math.PI / 2; e.alert = new Vector3(0, 0, 0); }
+    const dt = 1 / 30; let inCover = 0, frames = 0, withTarget = 0;
+    for (let t = 0; t < 40; t += dt) {
+      swat.forEach((u, i) => u.update(dt, { foes: enemies, night: false, fog: 0, leader: car, order: "follow", grid, mates: swat, onShot: noop, slot: i, covers } as Ctx));
+      enemies.forEach((u) => u.update(dt, { foes: swat, night: false, fog: 0, leader: car, order: "attack", grid, mates: enemies, onShot: noop, slot: 0, aware: true } as Ctx));
+      Unit.tickFalls(dt); frames++;
+      for (const u of swat) if (u.alive) { if ((u as any).cover) inCover++; if (u.target) withTarget++; }
+    }
+    const res = { aliveE: enemies.filter((e) => e.alive).length, aliveS: swat.filter((u) => u.alive).length, coverPct: Math.round(inCover / frames / 14 * 100), targetPct: Math.round(withTarget / frames / 14 * 100) };
+    console.log("SWAT:", JSON.stringify(res));
+    expect(res.aliveE).toBeLessThan(10);
+    expect(res.coverPct).toBeGreaterThan(8);
+  });
   it("hücum əmrində qrup irəliləyir və döyüşür", () => {
     const s = sim("attack", 12, 30);
     console.log("attack:", s);

@@ -556,7 +556,8 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
       c.p.y = heightAt(c.p.x, c.p.z); c.m.position.copyFrom(c.p); c.m.rotation.y = c.yaw; c.cover.x = c.p.x; c.cover.z = c.p.z;
     });
     if (!swatMounted) {
-      if ((swatT -= dt) <= 0) { swatT = 0.5; for (const c of cars) c.cover.n = 0; for (const u of swat) { const cv = (u as unknown as { cover: Cover | null }).cover; if (u.alive && cv && cv.cap) cv.n++; } }
+      if ((swatT -= dt) <= 0) { swatT = 0.5; for (const c of cars) c.cover.n = 0;
+        if (order === "attack") for (const u of swat) { if (!u.alive || u.target) continue; let bd = 1e12, best: Unit | null = null; for (const e of enemies) { if (!e.alive) continue; const d = (e.pos.x - u.pos.x) ** 2 + (e.pos.z - u.pos.z) ** 2; if (d < bd) { bd = d; best = e; } } u.alert = best ? best.pos.clone() : null; } /* F — hücum: ən yaxın düşmənə doğru gedirlər (uzaqda olsa da) */ for (const u of swat) { const cv = (u as unknown as { cover: Cover | null }).cover; if (u.alive && cv && cv.cap) cv.n++; } }
       swat.forEach((u, i) => {
         if (!u.alive) return;
         u.dist = Math.hypot(u.pos.x - pp.x, u.pos.z - pp.z); u.setLod(u.dist < NEAR_R && i % 6 === 0, u.dist < 450);
