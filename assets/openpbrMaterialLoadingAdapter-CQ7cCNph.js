@@ -1,0 +1,1 @@
+export{t as OpenPBRMaterialLoadingAdapter}from"./openpbrMaterialLoadingAdapter-QLuFyvt2.js";

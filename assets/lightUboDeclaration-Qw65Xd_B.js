@@ -1,0 +1,1 @@
+export{t as lightUboDeclarationWGSL}from"./lightUboDeclaration-Byz-N3nf.js";

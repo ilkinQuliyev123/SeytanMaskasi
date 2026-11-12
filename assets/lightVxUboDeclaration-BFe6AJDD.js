@@ -1,0 +1,1 @@
+export{t as lightVxUboDeclarationWGSL}from"./lightVxUboDeclaration-BtkjfZca.js";

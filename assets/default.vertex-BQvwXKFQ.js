@@ -1,0 +1,1 @@
+export{t as defaultVertexShaderWGSL}from"./default.vertex-tO68raNo.js";

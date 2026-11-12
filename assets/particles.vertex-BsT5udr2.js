@@ -1,0 +1,1 @@
+export{t as particlesVertexShaderWGSL}from"./particles.vertex-DFfc6Gd1.js";

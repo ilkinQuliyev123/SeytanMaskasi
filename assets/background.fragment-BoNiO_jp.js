@@ -1,0 +1,1 @@
+export{t as backgroundPixelShaderWGSL}from"./background.fragment-ufcS_4DB.js";

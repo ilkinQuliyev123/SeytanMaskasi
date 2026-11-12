@@ -1,0 +1,1 @@
+export{t as screenSpaceReflection2PixelShaderWGSL}from"./screenSpaceReflection2.fragment-Mje4QBB7.js";

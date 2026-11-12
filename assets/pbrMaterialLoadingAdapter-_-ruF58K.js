@@ -1,0 +1,1 @@
+export{t as PBRMaterialLoadingAdapter}from"./pbrMaterialLoadingAdapter-yUiariXf.js";

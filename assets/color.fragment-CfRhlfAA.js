@@ -1,0 +1,1 @@
+export{t as colorPixelShader}from"./color.fragment-DqVo2WVV.js";

@@ -1,0 +1,1 @@
+export{t as openpbrPixelShader}from"./openpbr.fragment-CT8Tjp48.js";

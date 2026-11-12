@@ -1,0 +1,1 @@
+export{t as colorVertexShader}from"./color.vertex-BElH2KbV.js";

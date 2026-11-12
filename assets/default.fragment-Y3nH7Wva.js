@@ -1,0 +1,1 @@
+export{t as defaultPixelShader}from"./default.fragment-CXiA_6Ip.js";

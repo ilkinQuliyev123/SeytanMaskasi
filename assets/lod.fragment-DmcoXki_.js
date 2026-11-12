@@ -1,0 +1,9 @@
+import{t as e}from"./shaderStore-D-XQlhUT.js";import{t}from"./helperFunctions-D89zo_74.js";var n=`lodPixelShader`,r=`precision highp float;
+#ifndef USE_EXACT_SRGB_CONVERSIONS
+#define USE_EXACT_SRGB_CONVERSIONS
+#endif
+#include<helperFunctions>
+varying vec2 vUV;uniform sampler2D textureSampler;uniform float lod;uniform vec2 texSize;uniform int gamma; 
+void main(void)
+{ivec2 textureDimensions=textureSize(textureSampler,0);gl_FragColor=texelFetch(textureSampler,ivec2(vUV*vec2(textureDimensions)),int(lod));if (gamma==0) {gl_FragColor.rgb=pow(gl_FragColor.rgb,vec3(GammaEncodePowerApprox));} else if (gamma==2) {gl_FragColor.rgb=toGammaSpaceExact(gl_FragColor.rgb);}}
+`;e.ShadersStore[n]||(e.ShadersStore[n]=r);var i=[t];for(let t of i)e.IncludesShadersStore[t.name]||(e.IncludesShadersStore[t.name]=t.shader);var a={name:n,shader:r};export{a as t};

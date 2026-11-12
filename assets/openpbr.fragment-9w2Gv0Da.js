@@ -1,0 +1,1 @@
+export{t as openpbrPixelShaderWGSL}from"./openpbr.fragment-BrONL_v4.js";

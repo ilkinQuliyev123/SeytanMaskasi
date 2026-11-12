@@ -1,0 +1,1 @@
+export{t as iblVoxelGridVertexShaderWGSL}from"./iblVoxelGrid.vertex-C7ZNy5pe.js";

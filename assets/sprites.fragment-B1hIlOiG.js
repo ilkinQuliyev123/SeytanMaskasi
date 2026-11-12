@@ -1,0 +1,1 @@
+export{t as spritesPixelShader}from"./sprites.fragment-O-h8LODn.js";

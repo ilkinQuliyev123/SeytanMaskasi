@@ -1,0 +1,1 @@
+export{t as backgroundPixelShader}from"./background.fragment-DNIPzsq4.js";
