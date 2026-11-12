@@ -107,7 +107,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
   for (let i = 0; i < 12; i++) { const c = new Unit(scene, UNITS.koylu, "", Vector3.Zero(), Vector3.Zero()); c.setRoute(roadRoute); civs.push(c); }
   const enemies = forts.flatMap((f) => f.units), cannons = forts.flatMap((f) => f.cannons);
   const hittable: Target[] = [...enemies, ...cannons];
-  LoadAssetContainerAsync("/assets/models/cannon_01/cannon_01.gltf", scene).then((c) => cannons.forEach((cn) => cn.useModel(c))).catch(() => {}); // real top modeli (yüklənənə qədər sadə model)
+  LoadAssetContainerAsync(import.meta.env.BASE_URL + "assets/models/cannon_01/cannon_01.gltf", scene).then((c) => cannons.forEach((cn) => cn.useModel(c))).catch(() => {}); // real top modeli (yüklənənə qədər sadə model)
   if (at === "hamlet") { const v = HAMLETS[0]; player.pos.set(v.x - 40, 0, v.z); player.yaw = Math.PI / 2; at = "x"; } // yoxlama: yapon kəndi
   else if (at === "street") { const p = northAt(NORTH.town[0] + 60, 0), q = northAt(NORTH.town[0] + 70, 0); player.pos.set(p.x, 0, p.z); player.yaw = Math.atan2(q.x - p.x, q.z - p.z); at = "x"; } // yoxlama: məhəllənin içi
   else if (at === "town") { const p = roadPoint(SITES[0], 360); player.pos.set(p.x, 0, p.z); player.yaw = 0; at = "x"; }

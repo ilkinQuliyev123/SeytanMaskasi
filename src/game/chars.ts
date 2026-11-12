@@ -10,7 +10,7 @@ export type AnimState = "idle" | "walk" | "run" | "attack" | "shoot" | "dead" | 
 /** Prone_Loop — Blender-də yığılıb (blender/scripts/prone.py → Soldier_Anims.glb), qalanı UAL1 */
 export const CLIP: Record<AnimState, string> = { idle: "Idle_Loop", walk: "Walk_Loop", run: "Jog_Fwd_Loop", attack: "Sword_Attack", shoot: "Pistol_Shoot", dead: "Death01",
   crouch: "Crouch_Idle_Loop", crouchWalk: "Crouch_Fwd_Loop", prone: "Prone_Loop", roll: "Roll" };
-const DIR = "/assets/chars/";
+const DIR = import.meta.env.BASE_URL + "assets/chars/";
 
 type Prop = (k: Kit) => unknown; // baş/əl mərkəzinə nisbətən (+z irəli, +y yuxarı)
 /** glb — Blender modeli (public/assets/models/props.glb içində meş adı); yoxdursa Kit funksiyası işləyir */
@@ -68,7 +68,7 @@ export class CharLib {
 
   static async load(scene: Scene): Promise<CharLib> {
     const [extra, props, anims, ...outs] = await Promise.all([LoadAssetContainerAsync(DIR + "Soldier_Anims.glb", scene).catch(() => null),
-      LoadAssetContainerAsync("/assets/models/props.glb", scene).catch(() => null), LoadAssetContainerAsync(DIR + "UAL1.glb", scene),
+      LoadAssetContainerAsync(import.meta.env.BASE_URL + "assets/models/props.glb", scene).catch(() => null), LoadAssetContainerAsync(DIR + "UAL1.glb", scene),
       ...OUTFITS.map((o) => LoadAssetContainerAsync(DIR + o + ".gltf", scene).catch((e) => { if (o in SOLDIER) return null; throw e; }))]);
     const map: Record<string, AssetContainer> = {};
     OUTFITS.forEach((o, i) => { const c = outs[i] ?? outs[0]; if (c) map[o] = c; }); // Blender əsgəri yüklənməsə — köhnə Ranger

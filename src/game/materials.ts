@@ -3,7 +3,7 @@ import { HDRCubeTexture, PBRMaterial, Scene, Texture, type BaseTexture } from "@
 import { PBRCustomMaterial } from "@babylonjs/materials";
 
 export const TEX_M = 3; // 1 toxuma təkrarı = 3 m (faceUV hesabı üçün)
-const BASE = "/assets/tex/";
+const BASE = import.meta.env.BASE_URL + "assets/tex/";
 
 function tex(scene: Scene, file: string) {
   const t = new Texture(BASE + file, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
@@ -31,7 +31,7 @@ export function pbr(scene: Scene, name: string, opts: { metal?: number; tint?: s
 
 /** gecə HDRI-si: real ay işığı əksi və mühit işığı */
 export function environment(scene: Scene): BaseTexture {
-  const env = new HDRCubeTexture("/assets/sky/night.hdr", scene, 128, false, true, false, true);
+  const env = new HDRCubeTexture(import.meta.env.BASE_URL + "assets/sky/night.hdr", scene, 128, false, true, false, true);
   scene.environmentTexture = env;
   return env;
 }
