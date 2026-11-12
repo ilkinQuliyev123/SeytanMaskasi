@@ -71,6 +71,7 @@ export class Unit implements Target {
   get alive() { return this.hp > 0; }
   get evade() {
     if (this.rollT > 0) return 0.25;
+    if (this.type.beast) return this.moved > 0.004 ? 0.4 : 0.7; // qaçan heyvan: balaca, sürətli hədəf
     if (this.stance === "prone") return 0.35;
     if (this.stance === "crouch") return this.post || this.cover ? 0.2 : 0.55; // səngərdə/qaya arxasında əyilib — çətin vurulur
     return 1;
@@ -78,7 +79,7 @@ export class Unit implements Target {
   /** güllə yanından keçdi / vuruldu: bir müddət «atəş altında»; açıqdadırsa bəzən yana yuvarlanır */
   shotAt(from: Vector3) {
     this.fireT = 3;
-    if (this.post || this.hold || this.cover || this.rollT > 0 || this.rollCd > 0 || this.stance === "prone" || !this.alive || Math.random() > 0.3) return;
+    if (this.type.beast || this.post || this.hold || this.cover || this.rollT > 0 || this.rollCd > 0 || this.stance === "prone" || !this.alive || Math.random() > 0.3) return;
     const dx = this.pos.x - from.x, dz = this.pos.z - from.z, d = Math.hypot(dx, dz) || 1, s = Math.random() < 0.5 ? 1 : -1;
     this.rollV.set((-dz / d) * s * 4.2, 0, (dx / d) * s * 4.2); this.rollT = 0.8; this.rollCd = 4 + Math.random() * 4;
   }
@@ -90,7 +91,7 @@ export class Unit implements Target {
     for (const o of ctx.covers.near(near.x, near.z) as Cover[]) {
       if (o.n >= (o.r > 1.8 ? 3 : 2)) continue;
       const dn = (o.x - near.x) ** 2 + (o.z - near.z) ** 2, d = (o.x - this.pos.x) ** 2 + (o.z - this.pos.z) ** 2, de = (o.x - from.x) ** 2 + (o.z - from.z) ** 2;
-      if (dn < maxD * maxD && d < 30 * 30 && de > 64 && d < bd) { bd = d; best = o; }
+      if (dn < maxD * maxD && d < 45 * 45 && de > 64 && d < bd) { bd = d; best = o; }
     }
     if (!best) return false;
     this.freeCover(); this.cover = best; best.n++; this.coverT = 6 + Math.random() * 6; this.setCoverPts(from);
@@ -233,10 +234,17 @@ export class Unit implements Target {
       const squad = this.ally && !charge && !w.melee && !this.hold && ctx.order === "attack" ? this.squadGoal : null;
       if (stay) { goal = this.hold ?? this.slotPos(ctx); if (Vector3.Distance(goal, this.pos) < 2) goal = null; else speed = this.type.speed * (Vector3.Distance(goal, this.pos) > 15 ? 1.6 : 1); }
       else if (squad) { goal = Vector3.Distance(squad, this.pos) > 2 ? squad : null; speed = this.type.speed * 1.15; } // 10-luq qrup öz zolağında irəliləyir
-      else if (d > want || blocked) { goal = this.target.pos; speed = this.type.speed * 1.3; }
+      else if (d > want || blocked) {
+        goal = this.target.pos; speed = this.type.speed * 1.3;
+        if (!this.ally && !this.type.beast && !w.melee && this.fireT > 0 && d < 110) { // atəş altında sıçrayışlarla irəliləyir: qaçır, yatıb atır, yenə qaçır
+          this.peekT -= dt;
+          if (this.peekT <= 0) { this.peek = !this.peek; this.peekT = this.peek ? 1.5 + Math.random() * 1.5 : 2 + Math.random() * 2; }
+          if (!this.peek) goal = null;
+        }
+      }
       // sığınacaq: atəş altında (və ya mövqedə) yaxındakı qaya/taya arxasına keçir, oradan yandan baxıb atır
-      if (!this.post && !this.hold && !w.melee && !charge && d > 8) {
-        if (!this.cover && (this.fireT > 0 || !goal) && this.think > 0.2) this.takeCover(ctx, this.target.pos, stay ? this.slotPos(ctx) : squad ?? this.pos, squad ? 16 : 12);
+      if (!this.post && !this.hold && !w.melee && !charge && !this.type.beast && d > 8) {
+        if (!this.cover && (this.fireT > 0 || !goal) && this.think > 0.2) this.takeCover(ctx, this.target.pos, stay ? this.slotPos(ctx) : squad ?? this.pos, squad ? 28 : 22);
         if (this.cover) {
           this.coverT -= dt;
           const leaderFar = stay && !this.hold && Vector3.Distance(this.slotPos(ctx), this.hidePos) > 22;
@@ -251,7 +259,7 @@ export class Unit implements Target {
         }
       }
       // duruş: qaya arxasında əyilir; açıqda dayanıb atanda — uzanır və ya diz üstə; qaçanda ayaqda
-      if (!this.post) {
+      if (!this.post && !this.type.beast) {
         if (this.cover) this.stance = this.peek && this.cover.h > 2.2 ? "stand" : "crouch";
         else if (!goal) this.stance = this.fireT > 0 || d < 90 ? (this.prefProne ? "prone" : "crouch") : "stand";
         else this.stance = "stand";

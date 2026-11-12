@@ -251,6 +251,12 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     if (at === "hill") { player.pos.set(HILLS[0].x - 12, 0, HILLS[0].z + 4); player.yaw = Math.PI / 2 - 0.1; player.pitch = 0.12; }
     if (at === "trench") { player.pos.set(TRENCH_X[2] - 40, 0, 20); player.yaw = Math.PI / 2; }
     if (at === "meadow") { player.pos.set(COMPOUND.x1 + 45, 0, 0); player.yaw = -Math.PI / 2; player.pitch = 0.1; } }
+  // 21 canavar: oyunçunun ətrafında gəzir; B — ən yaxın canlı düşmənə hücum (xəritənin hər yerində), yenə B — geri qayıdır
+  const wolves: Unit[] = Array.from({ length: 21 }, (_, i) => {
+    const a = (i / 21) * Math.PI * 2, rr = 5 + (i % 3) * 1.6, x = player.pos.x + Math.cos(a) * rr, z = player.pos.z + Math.sin(a) * rr;
+    const u = new Unit(scene, UNITS.canavar, "bite", new Vector3(x, 0, z), new Vector3(x, 0, z)); u.mesh.isPickable = false; return u;
+  });
+  let wolfAttack = false, wolfT = 0;
   const enemies: Unit[] = [];
   const trenchOf = (bi: number) => TRENCH_X.map((x, i) => ({ x, i })).filter(({ x }) => ENEMY_BARRACKS.reduce((b, q, j) => (Math.abs(q.x - x) < Math.abs(ENEMY_BARRACKS[b].x - x) ? j : b), 0) === bi).map((t) => t.i);
   ENEMY_BARRACKS.forEach((b, bi) => {
@@ -383,6 +389,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
   const onKey = (e: KeyboardEvent) => {
     if (paused || ended || e.repeat) return;
     if (e.code === "KeyF") { order = order === "follow" ? "attack" : "follow"; for (const a of allies) if (!a.hold) a.alert = null; say(order === "attack" ? "Dəstə: HÜCUM! Süngü taxın!" : "Dəstə: məni izlə", 2.5); }
+    if (e.code === "KeyB") { wolfAttack = !wolfAttack; for (const w of wolves) { w.alert = null; w.target = null; } say(wolfAttack ? "Canavarlar: HÜCUM! Düşməni parçalayın!" : "Canavarlar geri qayıdır", 2.5); }
     if (e.code === "KeyG") {
       const g = guns.filter((x) => crewOf(x).length < 3).sort((a, b) => Vector3.Distance(a.pos, player.pos) - Vector3.Distance(b.pos, player.pos))[0];
       if (!g) { say("Bütün toplarda heyət var", 2); return; }
@@ -479,7 +486,15 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     }
     if ((sqT -= dt) <= 0) { sqT = 0.5; assignSquads(); }
     allies.forEach((u, i) => u.update(dt, { foes: enemies, night: false, fog: 0, leader: pp, order, grid, mates: allies, onShot: shot, slot: i, blocked, via: viaGate, covers: coverGrid }));
-    const foes: Target[] = [player, ...allies];
+    // canavarlar: izləmə — yalnız 7 m-ə gələn düşməni dişləyir; hücum — xəritənin hər yerində ən yaxın canlı düşmənə qaçır
+    if ((wolfT -= dt) <= 0) { wolfT = 0.5; if (wolfAttack) for (const w of wolves) { if (!w.alive || w.target) continue; let bd = 1e12, best: Unit | null = null; for (const e of enemies) { if (!e.alive) continue; const d = (e.pos.x - w.pos.x) ** 2 + (e.pos.z - w.pos.z) ** 2; if (d < bd) { bd = d; best = e; } } w.alert = best ? best.pos.clone() : null; } }
+    wolves.forEach((w, i) => {
+      if (!w.alive) return;
+      w.dist = Math.hypot(w.pos.x - pp.x, w.pos.z - pp.z); w.setLod(false, w.dist < 450);
+      const wf: Unit[] = wolfAttack ? enemies : enemies.filter((e) => e.alive && (e.pos.x - w.pos.x) ** 2 + (e.pos.z - w.pos.z) ** 2 < 49);
+      w.update(dt, { foes: wf, night: false, fog: 0, leader: pp, order: wolfAttack ? "attack" : "follow", grid, mates: wolves, onShot: shot, slot: i });
+    });
+    const foes: Target[] = [player, ...allies, ...wolves.filter((w) => w.alive)];
     for (const u of enemies) {
       if (!u.alive) continue;
       const busy = u.target || u.alert;

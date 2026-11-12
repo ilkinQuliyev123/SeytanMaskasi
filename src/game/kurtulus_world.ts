@@ -229,11 +229,11 @@ function buildMeadow(scene: Scene, grid: Grid, covers: Cover[]) {
 function buildRocks(scene: Scene, grid: Grid, covers: Cover[]) {
   const k = new Kit(scene), r = rng(77);
   k.texMap = { [STONE]: TM[STONE] };
-  for (let i = 0, n = 0; i < 4000 && n < 170; i++) {
+  for (let i = 0, n = 0; i < 14000 && n < 520; i++) {
     const x = MEADOW.x1 + 20 + r() * (COAST - 60 - MEADOW.x1 - 20), z = (r() - 0.5) * 2 * (VALLEY - 45);
     if (nearTrench(x, z, 14) || onLink(x, z, 6) || onRoad(x, z) || Math.abs(z) < 8 ||
       FLAT.some((f) => Math.hypot(x - f.x, z - f.z) < f.r + 4) || HILLS.some((h) => Math.hypot(x - h.x, z - h.z) < (h.big ? 30 : 14)) ||
-      covers.some((c) => Math.hypot(c.x - x, c.z - z) < 14)) continue;
+      covers.some((c) => Math.hypot(c.x - x, c.z - z) < 9)) continue;
     const h = 2.6 + r() * 0.7, rad = 1.3 + r() * 0.9, y = heightAt(x, z), a = r() * 6;
     k.sph(1, STONE, [x, y + h * 0.42, z], [rad * 2, h * 1.12, rad * 1.7], 6)
       .sph(1, STONE, [x + Math.sin(a) * rad * 0.6, y + h * 0.25, z + Math.cos(a) * rad * 0.6], [rad * 1.5, h * 0.7, rad * 1.4], 5);

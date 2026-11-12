@@ -172,6 +172,12 @@ Son commit-lər GitHub-dadır (`3dee403` və əvvəlki). **Xəritə 2 — Qurtul
 - Oyunçu canı 1900. Headless Edge-də FPS 0 — hərəkət/taktika yalnız istifadəçinin oyununda yoxlanır.
 - İstifadəçi CoD MW səviyyəsi istədi — 840M üçün real deyil dedim; təklif: FP M16/snayper Blender-də normal/AO bişirilmiş PBR, forma parça teksturası, tüfəng animasiyaları.
 
+## Vəziyyət (12.11.2026 — istifadəçi oynadı: FPS 20, gizlənmə/əyilmə görünmürdü)
+- Səbəb (tests/tactics.test.ts simulyasiyası ilə sübut): 170 qaya 1 km²-ə — əsgərin 12 m-ində qaya ehtimalı ~8%. Düzəliş: 520 qaya (ara 9 m), sığınacaq axtarışı 22/28 m (özündən 45 m-ə qədər). Düşmən atəş altında sıçrayışlarla gəlir (1.5–3 s qaçır, 2–4 s yatıb atır) — əvvəl 25 m-ə qədər ayaq üstə qaçırdı.
+- **Canavarlar:** 21 canavar (UNITS.canavar, hp 300, sürət 7.2, «bite» 38 dmg, beast: əyilmir/gizlənmir/yuvarlanmır, qaçanda evade 0.4). Model kit.ts `wolf`. **B** — hücum (hər 0.5 s ən yaxın canlı düşmən xəritənin hər yerində alert olur), yenə **B** — geri (izləmədə yalnız 7 m-ə gələni dişləyir). Düşmənin hədəf siyahısına canavarlar da daxildir.
+- Opera GX də registrdə NVIDIA-ya keçirildi (Edge/Chrome əvvəldən). FPS 20 — növbəti: istifadəçi edge://gpu / opera://gpu ilə NVIDIA-nın aktiv olduğunu yoxlasın; sonra profil (draw call, ot, ağac, uzaq əsgər məsafəsi 520/450).
+- Vitest: `npx vitest run` — 27 test (tactics.test.ts NullEngine ilə Unit simulyasiyası; təsadüfi balans → hədlər yumşaqdır).
+
 ## Növbəti (istifadəçi qayıdanda)
 1. Soruş: FPS neçədir (NVIDIA ilə)? Taktika oyunda necə görünür?
    - Növbəti Blender işi: FP M16/snayper (PBR), tüfəng nişan/atəş/süngü animasiyaları (indi Pistol_Shoot/Sword_Attack).
