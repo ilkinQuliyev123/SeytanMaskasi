@@ -1,4 +1,5 @@
 // Oyun dövrəsi: səhnə, dünya, səma, qəsrlər, oyunçu, dəstə, düşmən ordusu, toplar, HUD, qələbə/məğlubiyyət.
+import { attachPerf } from "./perf";
 import { Color3, DefaultRenderingPipeline, Engine, GlowLayer, ImageProcessingConfiguration, LoadAssetContainerAsync, MeshBuilder, PointLight, Ray, Scene, SSAO2RenderingPipeline, StandardMaterial, Vector3, type LinesMesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { FORTS, UNITS, type ArmySetup, type Fort, type GameMap } from "./data";
@@ -347,6 +348,7 @@ export async function runGame(engine: Engine, canvas: HTMLCanvasElement, map: Ga
     scene.dispose();
     onExit();
   }
+  attachPerf(engine, scene);
   if (TEST) setInterval(() => scene.render(), 60); // test: virtual zamanda rAF işləmir — taymerlə, sabit 0.06 s addım
   else engine.runRenderLoop(() => scene.render());
   if (location.search.includes("test")) (window as unknown as { __game: unknown }).__game = { player, dragon, moto, enemies, allies, grid, forts, state: () => ({ paused, ended, time: gameTime }) };

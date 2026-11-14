@@ -185,3 +185,14 @@ Son commit-lər GitHub-dadır (`3dee403` və əvvəlki). **Xəritə 2 — Qurtul
 3. FPS 60 deyilsə: əsgər sayı / ot məsafəsi, uzaq ağacları gizlət, relyef materialını ucuzlaşdır.
 4. Xəritə 2-də yoxlanmayanlar: G ilə topa heyət, gəmi/qayıq batırma, desant, süngü; kənd və böyük təpə görüntüsü; dağların rəngi (dumanda çox açıq).
 5. Köhnə siyahı: xəritə 1 (NavMesh, ayarlar, mini-xəritə), xəritə 3–4, deploy, səs.
+
+## Vəziyyət (14.11.2026 — gamedev skill-ləri + performans paneli)
+- `.claude/skills/`-də `gamedev-skills/awesome-gamedev-agent-skills` (Apache-2.0) paketindən oyuna uyğun 17 skill: `gamedev-router`, `fps-shooter` və 15 intizam (performance-optimization, game-feel, game-ai, ai-behavior-trees-utility-ai, camera-systems, level-design, audio-design, game-ui-ux, input-systems, physics-tuning, save-systems, shader-programming, procedural-gen, dialogue-systems, create-game-assets). Babylon.js üçün ayrıca skill YOXDUR — `gamedev-router/references/custom-engines.md` yolu ilə işlə (nümunələr Godot/Unity-dədir, konsept kimi götür). Mühərrik skill-ləri (Godot/Unity/Unreal/Roblox…) qəsdən qurulmayıb.
+- **Performans paneli** `src/game/perf.ts` (F3 və ya `?perf`, hər iki xəritə): kadr ms (orta/p95/maks), CPU = məntiq + animasiya + seçim + çəkiliş, GPU ms (brauzer icazə versə), çəkiliş çağırışı, üçbucaq, ekran miqyası, video kart adı, «dar boğaz CPU/GPU» nəticəsi. Headless-də vaxtlar 0 çıxır — real rəqəm yalnız istifadəçinin brauzerində.
+- **Atəş tezliyi düzəlişi** (`Gun`, logic.ts; fps-shooter skill-i): soyuma qalığı itirdi → M16 11 əvəzinə 10 atəş/san verirdi (hər FPS-də). İndi qalıq saxlanır; test: 20/30/60/144 FPS-də 10 s atəş ±1.
+- Vitest 33 test.
+
+## Növbəti (14.11-dən)
+1. İstifadəçi F3 panelinin 6 sətrini göndərsin (xəritə 2, döyüş vaxtı). «KART» sətri NVIDIA 840M göstərməlidir (Intel/SwiftShader göstərsə — brauzer GPU ayarı işləməyib).
+2. Nəticə CPU-dursa: Unit AI-ni zaman dilimlərinə böl, animasiyalı əsgər sayı, çəkiliş çağırışı (294 idi, 20 əsgərlə) azalt; avtomatik ekran kiçiltmə CPU dar boğazında işləməməlidir (indi boş yerə bulanıqlaşdırır). GPU-dursa: ekran miqyası, ot/ağac məsafəsi, relyef materialı.
+3. Sonra skill-lərlə: game-feel (ekran titrəməsi «travma» modeli, hit-stop, azaltma ayarı), fps-shooter (TTK cədvəli testi, düşmən reaksiya gecikməsi 0.3–0.6 s, geri təpmə ofseti), game-ui-ux (ayarlar menyusu), save-systems (saxlama nöqtələri).

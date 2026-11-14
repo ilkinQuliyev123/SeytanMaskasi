@@ -50,6 +50,17 @@ describe("canSee", () => {
 });
 
 describe("Gun", () => {
+  it("atəş tezliyi FPS-dən asılı deyil (10 s fasiləsiz atəş)", () => {
+    for (const w of [WEAPONS.m16, WEAPONS.aug, WEAPONS.glock]) for (const fps of [20, 30, 60, 144]) {
+      const g = new Gun({ ...w, mag: 100000 }); let n = 0;
+      for (let i = 0; i < fps * 10; i++) { if (g.fire()) n++; g.update(1 / fps); }
+      expect(Math.abs(n - w.rate * 10), `${w.id} @${fps}`).toBeLessThanOrEqual(1);
+    }
+  });
+  it("fasilədən sonra atəş yığılmır", () => {
+    const g = new Gun({ ...WEAPONS.m16, mag: 100000 });
+    g.update(5); expect(g.fire()).toBe(true); g.update(1 / 60); expect(g.fire()).toBe(false);
+  });
   it("rifle has cooldown, recovers, and reloads after emptying the mag", () => {
     const g = new Gun(WEAPONS.rifle);
     expect(g.fire()).toBe(true);

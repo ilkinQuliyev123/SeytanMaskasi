@@ -2,6 +2,7 @@
 // Kənddəki kazarmadan 100 türk əsgəri ilə çıx, 10 səngər xəttini sahilə qədər təmizlə (quruda 3 kazarma — 300 düşmən).
 // Dənizdə 9 gəmi (hər birində 50 dənizçi) sahilə atəş açır. Təpələrdəki 6 topla (ən hündürdə böyük sahil topu) onları batır:
 // toplar yanında əsgər olanda özü atır; oyunçu E ilə topa keçib özü nişan ala bilər.
+import { attachPerf } from "./perf";
 import { ColorCurves, DirectionalLight, HemisphericLight, ShadowGenerator, VertexBuffer } from "@babylonjs/core";
 import { Color3, Color4, DefaultRenderingPipeline, DynamicTexture, Engine, GlowLayer, ImageProcessingConfiguration, Mesh, MeshBuilder, ParticleSystem,
   PointLight, Ray, Scene, StandardMaterial, TransformNode, Vector3, type InstancedMesh, type LinesMesh } from "@babylonjs/core";
@@ -691,6 +692,7 @@ export async function runKurtulus(engine: Engine, canvas: HTMLCanvasElement, map
     hudRef.destroy(); player.dispose(); hitMark.remove();
     engine.stopRenderLoop(); scene.dispose(); onExit();
   }
+  attachPerf(engine, scene);
   if (location.search.includes("test")) setInterval(() => scene.render(), 60);
   else engine.runRenderLoop(() => scene.render());
   (window as unknown as { __game: unknown }).__game = { player, allies, enemies, wolves, swat, cars, apcs, ships, guns, state: () => ({ paused, ended, time: gameTime, manning: !!manning, battle }) };

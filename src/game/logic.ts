@@ -210,7 +210,7 @@ export class Gun {
   ammo: number; cool = 0; reloading = 0;
   constructor(public w: Weapon) { this.ammo = w.mag; }
   update(dt: number) {
-    this.cool = Math.max(0, this.cool - dt);
+    this.cool = Math.max(-1 / this.w.rate, this.cool - dt); // mənfi qalıq saxlanır (ən çox bir interval) — atəş tezliyi FPS-dən asılı olmasın
     if (this.reloading > 0 && (this.reloading -= dt) <= 0) this.ammo = this.w.mag;
   }
   /** atəş açıla bilərsə true qaytarır və sursatı azaldır (soyuq silahda sursat yoxdur) */
@@ -218,7 +218,7 @@ export class Gun {
     if (this.cool > 0 || this.reloading > 0) return false;
     if (this.w.mag > 0 && this.ammo <= 0) { this.reload(); return false; }
     if (this.w.mag > 0) this.ammo--;
-    this.cool = 1 / this.w.rate;
+    const iv = 1 / this.w.rate; this.cool = this.cool <= -iv ? iv : this.cool + iv; // fasilədən sonra atəş yığılmır; fasiləsiz atəşdə kadr qalığı itmir
     if (this.w.mag > 0 && this.ammo === 0 && this.w.reload > 0) this.reload();
     return true;
   }
